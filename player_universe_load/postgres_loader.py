@@ -74,19 +74,55 @@ class PostgresLoader:
             columns = []
 
             # Get field info from Pydantic model
-            for field_name, field_info in model_class.__fields__.items():
-                field_type = field_info.annotation
-                pg_type = self.get_postgres_type(field_type)
+            model_fields = getattr(model_class, "__fields__", None)
+            if model_fields:
+                # Pydantic v1 style
+                for field_name, field_info in model_fields.items():
+                    field_type = field_info.annotation
+                    pg_type = self.get_postgres_type(field_type)
 
-                # Add NULL/NOT NULL constraint
-                null_constraint = "" if field_info.required is False else " NOT NULL"
+                    # Make all fields nullable for data compatibility
+                    null_constraint = ""
 
-                columns.append(f"{field_name} {pg_type}{null_constraint}")
+                    columns.append(f"{field_name} {pg_type}{null_constraint}")
+            else:
+                # Pydantic v2 style
+                model_schema = model_class.model_json_schema()
+                properties = model_schema.get("properties", {})
+                # We'll make all fields nullable to handle the data we have
+                
+                for field_name, field_props in properties.items():
+                    field_type_name = field_props.get("type", "string")
+                    if field_type_name == "integer":
+                        pg_type = "INTEGER"
+                    elif field_type_name == "number":
+                        pg_type = "NUMERIC"
+                    elif field_type_name == "boolean":
+                        pg_type = "BOOLEAN"
+                    elif field_type_name == "object":
+                        pg_type = "JSONB"
+                    elif field_type_name == "array":
+                        pg_type = "JSONB"
+                    else:
+                        pg_type = "VARCHAR(255)"
+                    
+                    # Make all fields nullable
+                    null_constraint = ""
+                    
+                    columns.append(f"{field_name} {pg_type}{null_constraint}")
 
+            # We'll keep the id_espn field as is, but make it the primary key
+            primary_key_field = "id_espn"  # Using ESPN ID as primary key
+            
+            # Update the column definition to include PRIMARY KEY
+            for i, col in enumerate(columns):
+                if col.startswith(primary_key_field + " "):
+                    columns[i] = col + " PRIMARY KEY"
+                    break
+            
             # Create table
             create_sql = f"""
                 CREATE TABLE {table_name} (
-                    id SERIAL PRIMARY KEY,
                     {",\n                ".join(columns)},
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
@@ -116,24 +152,49 @@ class PostgresLoader:
         if not data:
             print("No data to load")
             return
+            
+        # Check for retired players and filter them out
+        valid_data = []
+        for record in data:
+            if record.get("status") != "retired":
+                valid_data.append(record)
+                
+        print(f"Found {len(data)} total records, {len(valid_data)} non-retired records")
+        data = valid_data
 
         conn = self.get_connection()
         cursor = conn.cursor()
 
         try:
             # Get field names from model
-            field_names = list(model_class.__fields__.keys())
+            model_fields = getattr(model_class, "__fields__", None)
+            if model_fields:
+                # Pydantic v1 style
+                field_names = list(model_fields.keys())
+            else:
+                # Pydantic v2 style
+                model_schema = model_class.model_json_schema()
+                field_names = list(model_schema.get("properties", {}).keys())
+            
+            # Replace id_espn with id_espn_pk for the primary key
+            db_field_names = []
+            for field in field_names:
+                if field == "id_espn":
+                    db_field_names.append("id_espn_pk")
+                else:
+                    db_field_names.append(field)
+            
             placeholders = ", ".join(["%s"] * len(field_names))
 
             insert_sql = f"""
-            INSERT INTO {table_name} ({", ".join(field_names)})
+            INSERT INTO {table_name} ({", ".join(db_field_names)})
             VALUES ({placeholders})
             """
 
             # Prepare values for insertion
             values_list = []
             for record in data:
-                # Since data is already validated, we can directly extract values
+                # Extract values, handling missing fields gracefully
                 values = []
                 for field_name in field_names:
                     value = record.get(field_name)
@@ -141,6 +202,10 @@ class PostgresLoader:
                     # Handle nested structures
                     if isinstance(value, (dict, list)):
                         value = json.dumps(value)
+                    
+                    # Convert empty strings to None for database consistency
+                    if value == "":
+                        value = None
 
                     values.append(value)
 
