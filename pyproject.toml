@@ -1,0 +1,16 @@
+[project]
+name = "player-universe-load"
+version = "0.1.0"
+description = "This loads a local transformed Player Universe (combined ESPN + Fangraphs) from json and uploads it as a postgres database hosted by AWS."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "psycopg2>=2.9.10",
+    "pydantic>=2.11.4",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.15.0",
+    "types-psycopg2>=2.9.21.20250318",
+]
