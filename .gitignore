@@ -1,0 +1,7 @@
+
+**/.claude/settings.local.json
+**__pycache__**
+
+# Sensitive configuration files
+**/secrets.py
+
