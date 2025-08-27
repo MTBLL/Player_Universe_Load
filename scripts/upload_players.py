@@ -7,17 +7,10 @@ import sys
 from player_universe_load.models.player import PlayerModel
 from player_universe_load.postgres_loader import PostgresLoader
 
-# Database connection parameters
-DB_PARAMS = {
-    "host": "mtbl.chigsmi0ar1o.us-west-1.rds.amazonaws.com",
-    "port": "5432",
-    "dbname": "mtbl",
-    "user": "mtbl",
-    "password": "cPHVBe5pBpLlgG27l6Sg"
-}
-
-# Path to the transformed JSON file
-JSON_FILE_PATH = "/Users/Shared/BaseballHQ/resources/transform/player_universe_trxd.json"
+try:
+    from .config import DATABASE_URL, JSON_FILE_PATH
+except ImportError:
+    from config import DATABASE_URL, JSON_FILE_PATH  # type: ignore
 
 # Table name to use in PostgreSQL
 TABLE_NAME = "players"
@@ -31,9 +24,9 @@ def main():
     
     print(f"Using JSON file: {JSON_FILE_PATH}")
     
-    # Initialize the PostgresLoader with database parameters
+    # Initialize the PostgresLoader with connection string
     try:
-        loader = PostgresLoader(DB_PARAMS)
+        loader = PostgresLoader(connection_string=DATABASE_URL)
         print("PostgresLoader initialized successfully")
         
         # Test connection

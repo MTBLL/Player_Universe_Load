@@ -2,11 +2,13 @@
 """
 Detailed connection test for PostgreSQL database
 """
-import socket
-import time
-import sys
+
 import errno
-from typing import Dict, Union, Optional, Any
+import socket
+import sys
+import time
+from typing import Dict
+
 
 def get_error_message(error_code: int) -> str:
     """Convert socket error code to message"""
@@ -16,14 +18,15 @@ def get_error_message(error_code: int) -> str:
         errno.ECONNRESET: "Connection reset by peer",
         errno.ENOTSOCK: "Socket operation on non-socket",
         errno.ENETUNREACH: "Network is unreachable",
-        35: "Resource temporarily unavailable"  # Common on macOS
+        35: "Resource temporarily unavailable",  # Common on macOS
     }
     return error_messages.get(error_code, f"Unknown error ({error_code})")
+
 
 def test_postgres_connection(host: str, port: int = 5432, timeout: int = 10) -> bool:
     """Test PostgreSQL connection with detailed diagnostics"""
     print(f"Testing connection to {host}:{port} with timeout {timeout}s")
-    
+
     # DNS resolution test
     try:
         print(f"Resolving hostname {host}...")
@@ -34,7 +37,7 @@ def test_postgres_connection(host: str, port: int = 5432, timeout: int = 10) -> 
     except socket.gaierror as e:
         print(f"Error resolving hostname: {e}")
         return False
-    
+
     # Socket connection test
     try:
         print(f"Attempting to connect to {ip_address}:{port}...")
@@ -43,7 +46,7 @@ def test_postgres_connection(host: str, port: int = 5432, timeout: int = 10) -> 
         s.settimeout(timeout)
         result = s.connect_ex((ip_address, port))
         connection_time = time.time() - start_time
-        
+
         if result == 0:
             print(f"Successfully connected in {connection_time:.2f}s")
             s.close()
@@ -56,21 +59,22 @@ def test_postgres_connection(host: str, port: int = 5432, timeout: int = 10) -> 
         print(f"Socket error: {e}")
         return False
 
+
 if __name__ == "__main__":
-    host = "mtbl.chigsmi0ar1o.us-west-1.rds.amazonaws.com"
+    host = "ep-dawn-leaf-aew9d2fm.c-2.us-east-2.aws.neon.tech"
     port = 5432
-    
-    print("========== PostgreSQL Connection Test ==========")
+
+    print("========== Neon PostgreSQL Connection Test ==========")
     success = test_postgres_connection(host, port)
-    
+
     if success:
         print("Connection test passed!")
         sys.exit(0)
     else:
         print("Connection test failed!")
         print("\nPossible issues:")
-        print("1. Security group rules not allowing connections from your IP")
-        print("2. Network ACLs blocking traffic")
-        print("3. RDS instance not running or still initializing")
-        print("4. Local firewall blocking outbound connections")
+        print("1. Network connectivity issues")
+        print("2. Neon database instance not available")
+        print("3. Local firewall blocking outbound connections")
+        print("4. DNS resolution issues")
         sys.exit(1)

@@ -8,20 +8,14 @@ from psycopg2 import sql
 from psycopg2.extensions import connection, cursor
 
 try:
-    from .config import DB_PARAMS
+    from .config import DATABASE_URL
 except ImportError:
-    from config import DB_PARAMS  # type: ignore
+    from config import DATABASE_URL  # type: ignore
 
 def main() -> None:
     """Verify the players table structure and query capability"""
     try:
-        conn: connection = psycopg2.connect(
-            host=DB_PARAMS['host'],
-            port=DB_PARAMS['port'],
-            dbname=DB_PARAMS['dbname'],
-            user=DB_PARAMS['user'],
-            password=DB_PARAMS['password']
-        )
+        conn: connection = psycopg2.connect(DATABASE_URL)
         cursor_obj: cursor = conn.cursor()
         
         # Get column information

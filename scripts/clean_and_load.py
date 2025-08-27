@@ -8,9 +8,9 @@ import psycopg2
 from psycopg2.extensions import connection, cursor
 
 try:
-    from .config import DB_PARAMS, JSON_FILE_PATH, PLAYER_FIELDS, CREATE_TABLE_SQL
+    from .config import DATABASE_URL, JSON_FILE_PATH, PLAYER_FIELDS, CREATE_TABLE_SQL
 except ImportError:
-    from config import DB_PARAMS, JSON_FILE_PATH, PLAYER_FIELDS, CREATE_TABLE_SQL  # type: ignore
+    from config import DATABASE_URL, JSON_FILE_PATH, PLAYER_FIELDS, CREATE_TABLE_SQL  # type: ignore
 
 def main() -> None:
     """Main function to clean and reload the players table"""
@@ -35,13 +35,7 @@ def main() -> None:
     # Connect to the database
     print("\n2. Connecting to database...")
     try:
-        conn: connection = psycopg2.connect(
-            host=DB_PARAMS['host'],
-            port=DB_PARAMS['port'],
-            dbname=DB_PARAMS['dbname'],
-            user=DB_PARAMS['user'],
-            password=DB_PARAMS['password']
-        )
+        conn: connection = psycopg2.connect(DATABASE_URL)
         conn.autocommit = True
         cursor_obj: cursor = conn.cursor()
         

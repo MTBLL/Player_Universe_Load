@@ -3,27 +3,16 @@
 Configuration module for database connection
 """
 
-from typing import Dict
-
 # Import sensitive credentials
 try:
-    from .secrets import DB_PASSWORD
+    from .secrets import DATABASE_URL
 except ImportError:
     try:
-        from secrets import DB_PASSWORD  # type: ignore
+        from secrets import DATABASE_URL  # type: ignore
     except ImportError:
-        # Fallback to empty password in development
-        print("WARNING: secrets.py not found. Using empty password for development.")
-        DB_PASSWORD = ""
-
-# Database connection parameters
-DB_PARAMS: Dict[str, str] = {
-    "host": "mtbl.chigsmi0ar1o.us-west-1.rds.amazonaws.com",
-    "port": "5432",
-    "dbname": "mtbl",
-    "user": "mtbl",
-    "password": DB_PASSWORD,
-}
+        # Fallback for development
+        print("WARNING: secrets.py not found. Using fallback connection.")
+        DATABASE_URL = ""
 
 # Path to the transformed JSON file
 JSON_FILE_PATH: str = (

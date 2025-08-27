@@ -1,20 +1,19 @@
 import json
 from datetime import datetime
-from typing import Dict, Union
+from typing import Dict, Union, Optional
 
 import psycopg2
 
 
 class PostgresLoader:
-    def __init__(self, db_params: Dict[str, str]):
+    def __init__(self, connection_string: str):
         """
-        Initialize with database connection parameters
+        Initialize with database connection string
 
         Args:
-            db_params: Dictionary containing connection parameters:
-                       host, dbname, user, password, port
+            connection_string: Full PostgreSQL connection string
         """
-        self.db_params = db_params
+        self.connection_string = connection_string
         self.type_mapping = {
             str: "VARCHAR(255)",
             int: "INTEGER",
@@ -26,15 +25,8 @@ class PostgresLoader:
         }
 
     def get_connection(self):
-        """Get a PostgreSQL connection using the correct psycopg2 method"""
-        # For psycopg2 >= 2.9.10, connection parameters should be provided as keyword arguments
-        conn = psycopg2.connect(
-            host=self.db_params.get("host"),
-            dbname=self.db_params.get("dbname"),
-            user=self.db_params.get("user"),
-            password=self.db_params.get("password"),
-            port=self.db_params.get("port", "5432"),
-        )
+        """Get a PostgreSQL connection using connection string"""
+        conn = psycopg2.connect(self.connection_string)
         return conn
 
     def get_postgres_type(self, python_type) -> str:

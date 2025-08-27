@@ -3,26 +3,18 @@
 Check the schema of the players table
 """
 
-from typing import Dict
-
 import psycopg2
 
 try:
-    from .config import DB_PARAMS
+    from .config import DATABASE_URL
 except ImportError:
-    from config import DB_PARAMS  # type: ignore
+    from config import DATABASE_URL  # type: ignore
 
 
 def main() -> None:
     """Check the schema of the players table"""
     try:
-        conn = psycopg2.connect(
-            host=DB_PARAMS['host'],
-            port=DB_PARAMS['port'],
-            dbname=DB_PARAMS['dbname'],
-            user=DB_PARAMS['user'],
-            password=DB_PARAMS['password']
-        )
+        conn = psycopg2.connect(DATABASE_URL)
         cursor = conn.cursor()
 
         # Check if table exists
