@@ -2,11 +2,10 @@
 """CLI commands for Player Universe Load."""
 
 import os
-import sys
 import subprocess
+import sys
 from pathlib import Path
 
-from .db import get_connection
 from .__main__ import load_all
 
 
@@ -16,7 +15,7 @@ def load_local():
     print("   Connection: postgresql://localhost/fantasy_baseball\n")
 
     # Override to use local database
-    os.environ['DATABASE_URL'] = 'postgresql://localhost/fantasy_baseball'
+    os.environ["DATABASE_URL"] = "postgresql://localhost/fantasy_baseball"
 
     load_all()
 
@@ -60,6 +59,7 @@ def load_and_sync():
 def verify():
     """Verify database tables and data."""
     from .verification import verify_database
+
     verify_database()
 
 
@@ -83,28 +83,28 @@ Examples:
 
   # Verify database
   uv run -m player_universe_load verify
-        """
+        """,
     )
 
     parser.add_argument(
-        'command',
-        choices=['load-and-sync', 'load-local', 'sync-to-neon', 'verify'],
-        help='Command to execute'
+        "command",
+        choices=["load-and-sync", "load-local", "sync-to-neon", "verify"],
+        help="Command to execute",
     )
 
     args = parser.parse_args()
 
-    if args.command == 'load-and-sync':
+    if args.command == "load-and-sync":
         load_and_sync()
-    elif args.command == 'load-local':
+    elif args.command == "load-local":
         load_local()
-    elif args.command == 'sync-to-neon':
+    elif args.command == "sync-to-neon":
         sync_to_neon()
-    elif args.command == 'verify':
+    elif args.command == "verify":
         verify()
 
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

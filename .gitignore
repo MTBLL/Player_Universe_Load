@@ -1,6 +1,8 @@
 
 **/.claude/settings.local.json
 **__pycache__**
+.ropeproject/
+.venv/
 
 # Sensitive configuration files
 player_universe_load/secrets.py

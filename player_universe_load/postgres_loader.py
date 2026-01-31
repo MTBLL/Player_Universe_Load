@@ -1,6 +1,6 @@
 import json
 from datetime import datetime
-from typing import Dict, Union, Optional
+from typing import Union
 
 import psycopg2
 
@@ -82,7 +82,7 @@ class PostgresLoader:
                 model_schema = model_class.model_json_schema()
                 properties = model_schema.get("properties", {})
                 # We'll make all fields nullable to handle the data we have
-                
+
                 for field_name, field_props in properties.items():
                     field_type_name = field_props.get("type", "string")
                     if field_type_name == "integer":
@@ -97,21 +97,21 @@ class PostgresLoader:
                         pg_type = "JSONB"
                     else:
                         pg_type = "VARCHAR(255)"
-                    
+
                     # Make all fields nullable
                     null_constraint = ""
-                    
+
                     columns.append(f"{field_name} {pg_type}{null_constraint}")
 
             # We'll keep the id_espn field as is, but make it the primary key
             primary_key_field = "id_espn"  # Using ESPN ID as primary key
-            
+
             # Update the column definition to include PRIMARY KEY
             for i, col in enumerate(columns):
                 if col.startswith(primary_key_field + " "):
                     columns[i] = col + " PRIMARY KEY"
                     break
-            
+
             # Create table
             create_sql = f"""
                 CREATE TABLE {table_name} (
@@ -144,13 +144,13 @@ class PostgresLoader:
         if not data:
             print("No data to load")
             return
-            
+
         # Check for retired players and filter them out
         valid_data = []
         for record in data:
             if record.get("status") != "retired":
                 valid_data.append(record)
-                
+
         print(f"Found {len(data)} total records, {len(valid_data)} non-retired records")
         data = valid_data
 
@@ -167,7 +167,7 @@ class PostgresLoader:
                 # Pydantic v2 style
                 model_schema = model_class.model_json_schema()
                 field_names = list(model_schema.get("properties", {}).keys())
-            
+
             # Replace id_espn with id_espn_pk for the primary key
             db_field_names = []
             for field in field_names:
@@ -175,7 +175,7 @@ class PostgresLoader:
                     db_field_names.append("id_espn_pk")
                 else:
                     db_field_names.append(field)
-            
+
             placeholders = ", ".join(["%s"] * len(field_names))
 
             insert_sql = f"""
@@ -194,7 +194,7 @@ class PostgresLoader:
                     # Handle nested structures
                     if isinstance(value, (dict, list)):
                         value = json.dumps(value)
-                    
+
                     # Convert empty strings to None for database consistency
                     if value == "":
                         value = None
