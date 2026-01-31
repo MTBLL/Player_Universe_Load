@@ -4,7 +4,6 @@
 import os
 import subprocess
 import sys
-from pathlib import Path
 
 from .__main__ import load_all
 
@@ -24,19 +23,63 @@ def sync_to_neon():
     """Export local database and upload to Neon."""
     print("\n📦 Exporting local database and uploading to Neon...\n")
 
-    # Find the export script
-    script_path = Path(__file__).parent.parent / "scripts" / "export_and_upload.sh"
-
-    if not script_path.exists():
-        print(f"❌ Error: Export script not found at {script_path}")
+    # Get Neon DATABASE_URL
+    try:
+        from .secrets import DATABASE_URL as NEON_URL
+    except ImportError:
+        print(
+            "❌ Error: Could not load DATABASE_URL from player_universe_load/secrets.py"
+        )
+        print("   Please create secrets.py with your Neon DATABASE_URL")
         sys.exit(1)
 
-    # Run the shell script
-    result = subprocess.run(["bash", str(script_path)])
+    # Temporary dump file
+    dump_file = "/tmp/fantasy_baseball_dump.sql"
 
-    if result.returncode != 0:
-        print("\n❌ Upload to Neon failed!")
+    print("🔄 Step 1: Exporting local database...")
+    print("   Source: postgresql://localhost/fantasy_baseball")
+    print(f"   Output: {dump_file}\n")
+
+    # Export local database using pg_dump
+    pg_dump_result = subprocess.run(
+        ["pg_dump", "--clean", "--if-exists", "fantasy_baseball"],
+        stdout=open(dump_file, "w"),
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+    if pg_dump_result.returncode != 0:
+        print(f"❌ pg_dump failed: {pg_dump_result.stderr}")
         sys.exit(1)
+
+    print(f"   ✓ Export complete (~{os.path.getsize(dump_file) / 1024 / 1024:.1f}MB)\n")
+
+    print("📤 Step 2: Uploading to Neon...")
+    print(
+        f"   Target: {NEON_URL.split('@')[1] if '@' in NEON_URL else 'Neon database'}\n"
+    )
+
+    # Upload to Neon using psql
+    psql_result = subprocess.run(
+        ["psql", NEON_URL],
+        stdin=open(dump_file, "r"),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+    if psql_result.returncode != 0:
+        print(f"❌ psql upload failed: {psql_result.stderr}")
+        sys.exit(1)
+
+    print("   ✓ Upload complete\n")
+
+    # Cleanup
+    print("🧹 Cleaning up...")
+    os.remove(dump_file)
+    print(f"   ✓ Removed {dump_file}\n")
+
+    print("✅ Sync to Neon complete!")
 
 
 def load_and_sync():
@@ -73,16 +116,16 @@ def main():
         epilog="""
 Examples:
   # Load locally and sync to Neon (full workflow)
-  uv run -m player_universe_load load-and-sync
+  uv run player-universe-load load-and-sync
 
   # Just load locally (fast testing)
-  uv run -m player_universe_load load-local
+  uv run player-universe-load load-local
 
   # Just sync to Neon (if local DB already loaded)
-  uv run -m player_universe_load sync-to-neon
+  uv run player-universe-load sync-to-neon
 
   # Verify database
-  uv run -m player_universe_load verify
+  uv run player-universe-load verify
         """,
     )
 

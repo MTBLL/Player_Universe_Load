@@ -12,7 +12,7 @@ Load locally, then export/upload: **~2-3 minutes total** ⚡
 
 ```bash
 # Single command for everything:
-uv run -m player_universe_load load-and-sync
+uv run player-universe-load load-and-sync
 ```
 
 **Total time: ~3 minutes** (vs 60 minutes!)
@@ -23,10 +23,10 @@ uv run -m player_universe_load load-and-sync
 
 ```bash
 # Step 1: Load to local PostgreSQL (30 seconds)
-uv run -m player_universe_load load-local
+uv run player-universe-load load-local
 
 # Step 2: Sync to Neon (2-3 minutes)
-uv run -m player_universe_load sync-to-neon
+uv run player-universe-load sync-to-neon
 ```
 
 ---
@@ -57,10 +57,10 @@ cp player_universe_load/secrets.py.template player_universe_load/secrets.py
 
 ## What Gets Loaded
 
-- **2,940 players** (1,405 hitters + 1,535 pitchers)
-- **17,734 stat records** (batting + pitching, multiple time periods)
-- **2,940 projections**
-- **2,939 valuations** with z-scores and dollar values
+- **2.9k players** (1,405 hitters + 1,535 pitchers)
+- **17.7k stat records** (batting + pitching, multiple time periods)
+- **2.9k projections**
+- **2.9k valuations** with z-scores and dollar values
 - **1 league** with 12 scoring categories
 - **11 teams** with full rosters (258 roster slots)
 - **110 matchups** (schedule)
@@ -92,7 +92,7 @@ All tables use **foreign keys** for automatic Hasura GraphQL relationships!
 ### Verify Database
 
 ```bash
-uv run -m player_universe_load verify
+uv run player-universe-load verify
 ```
 
 Shows table counts and sample queries.
@@ -188,13 +188,11 @@ Check `player_universe_load/secrets.py` has correct `DATABASE_URL`
 player_universe_load/          # Main Python package
 ├── schemas/                   # 12 SQL schema files
 ├── loaders/                   # Python data loaders
+├── validation/                # Schema validation
 ├── cli.py                     # CLI commands
 ├── db.py                      # Database utilities
 ├── verification.py            # Verification tools
 └── secrets.py                 # DB credentials (gitignored)
-
-scripts/                       # Shell scripts
-└── export_and_upload.sh       # Export and upload to Neon
 
 tests/fixtures/                # JSON data files
 ├── hitters.json

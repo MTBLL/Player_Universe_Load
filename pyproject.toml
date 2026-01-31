@@ -9,9 +9,15 @@ dependencies = [
     "pydantic>=2.11.4",
 ]
 
+[project.scripts]
+player-universe-load = "player_universe_load.cli:main"
+
 [dependency-groups]
 dev = [
     "mypy>=1.15.0",
     "types-psycopg2>=2.9.21.20250318",
     "pytest>=8.3.4",
 ]
+
+[tool.uv]
+package = true

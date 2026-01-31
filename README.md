@@ -19,10 +19,10 @@ See **[QUICK_START.md](QUICK_START.md)** for the fastest way to get started.
 **TL;DR:**
 ```bash
 # 1. Load to local PostgreSQL (30 seconds)
-uv run python scripts/load_local.py
+uv run player-universe-load load-local
 
 # 2. Export and upload to Neon (2-3 minutes)
-bash scripts/export_and_upload.sh
+uv run player-universe-load sync-to-neon
 ```
 
 ---
@@ -73,8 +73,8 @@ See **[docs/postgres_schema_design.md](docs/postgres_schema_design.md)** for com
 - **Start**: `brew services start postgresql@18`
 
 ### Neon (Remote)
-- **Connection**: Stored in `scripts/secrets.py`
-- **Template**: Copy `scripts/secrets.py.template` to `scripts/secrets.py`
+- **Connection**: Stored in `player_universe_load/secrets.py`
+- **Template**: Copy `player_universe_load/secrets.py.template` to `player_universe_load/secrets.py`
 - **Add your Neon DATABASE_URL** to the secrets file
 
 ### Data Source
@@ -102,15 +102,13 @@ player_universe_load/          # Main Python package
 │   ├── leagues.py            # League settings
 │   ├── matchups.py           # Schedule
 │   └── teams.py              # Teams + rosters
-├── db.py                     # Database utilities
-└── __main__.py               # Main loader entry point
-
-scripts/                       # Executable scripts
-├── load_local.py             # Load to local PostgreSQL
-├── export_and_upload.sh      # Export and upload to Neon
-├── config.py                 # Configuration
-├── secrets.py                # Database credentials (gitignored)
-└── verify_table.py           # Verification utilities
+├── validation/                # Schema validation
+│   └── schema_validator.py   # Validate data vs DB schema
+├── cli.py                     # CLI commands
+├── db.py                      # Database utilities
+├── verification.py            # Database verification
+├── __main__.py                # Main loader entry point
+└── secrets.py                 # Database credentials (gitignored)
 
 tests/fixtures/                # JSON data files
 ├── hitters.json
@@ -158,18 +156,18 @@ tests/fixtures/                # JSON data files
 
 3. **Configure Neon credentials**
    ```bash
-   cp scripts/secrets.py.template scripts/secrets.py
-   # Edit scripts/secrets.py and add your DATABASE_URL
+   cp player_universe_load/secrets.py.template player_universe_load/secrets.py
+   # Edit player_universe_load/secrets.py and add your DATABASE_URL
    ```
 
 ### Load Data
 
 ```bash
 # Step 1: Load to local PostgreSQL (30 seconds)
-uv run python scripts/load_local.py
+uv run player-universe-load load-local
 
 # Step 2: Export and upload to Neon (2-3 minutes)
-bash scripts/export_and_upload.sh
+uv run player-universe-load sync-to-neon
 ```
 
 ### Verify Data
@@ -190,7 +188,7 @@ ORDER BY s."HR" DESC;
 
 **Verification script:**
 ```bash
-uv run python scripts/verify_table.py
+uv run player-universe-load verify
 ```
 
 ---
@@ -260,12 +258,12 @@ brew services start postgresql@18
 ```
 
 ### Neon connection issues
-- Check `scripts/secrets.py` has correct `DATABASE_URL`
+- Check `player_universe_load/secrets.py` has correct `DATABASE_URL`
 - Verify Neon security group allows your IP
 
 ### Data validation
 ```bash
-uv run python scripts/verify_table.py
+uv run player-universe-load verify
 ```
 
 ---
@@ -279,9 +277,9 @@ uv run pytest tests/test_load_integration.py -v
 
 ### Update schema
 1. Modify schema files in `player_universe_load/schemas/`
-2. Reload local database: `uv run python scripts/load_local.py`
+2. Reload local database: `uv run player-universe-load load-local`
 3. Test locally
-4. Upload when ready: `bash scripts/export_and_upload.sh`
+4. Upload when ready: `uv run player-universe-load sync-to-neon`
 
 ### Add new data loaders
 1. Create loader in `player_universe_load/loaders/`

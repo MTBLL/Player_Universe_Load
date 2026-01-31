@@ -93,15 +93,15 @@ def main():
     """Main CLI entry point - delegates to cli.py for command handling."""
     # If run directly without arguments, show usage
     if len(sys.argv) == 1:
-        print("Usage: uv run -m player_universe_load <command>")
+        print("Usage: uv run player-universe-load <command>")
         print("\nCommands:")
         print("  load-and-sync  - Load locally and sync to Neon (full workflow)")
         print("  load-local     - Load to local PostgreSQL only")
         print("  sync-to-neon   - Sync local database to Neon")
         print("  verify         - Verify database structure and data")
         print("\nExamples:")
-        print("  uv run -m player_universe_load load-and-sync")
-        print("  uv run -m player_universe_load load-local")
+        print("  uv run player-universe-load load-and-sync")
+        print("  uv run player-universe-load load-local")
         return 0
 
     # Delegate to CLI

@@ -23,8 +23,15 @@ else:
 def get_connection():
     """Get database connection."""
     print("🔌 Connecting to database...")
+
+    # Always check environment variable first to allow runtime overrides
+    db_url = os.environ.get('DATABASE_URL')
+    if not db_url:
+        # Fall back to module-level DATABASE_URL (from secrets.py)
+        db_url = DATABASE_URL
+
     try:
-        conn = psycopg2.connect(DATABASE_URL)
+        conn = psycopg2.connect(db_url)
         # Test connection
         with conn.cursor() as cur:
             cur.execute("SELECT version();")

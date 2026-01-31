@@ -6,10 +6,10 @@
 
 ```bash
 # 1. Load to local PostgreSQL (30 seconds)
-uv run python scripts/load_local.py
+uv run player-universe-load load-local
 
 # 2. Export and upload to Neon (2-3 minutes)
-bash scripts/export_and_upload.sh
+uv run player-universe-load sync-to-neon
 ```
 
 **Total time: ~3 minutes** (vs 60+ minutes for direct remote loading!)
@@ -43,11 +43,11 @@ brew services start postgresql@18
 
 **Copy template and configure:**
 ```bash
-cp scripts/secrets.py.template scripts/secrets.py
-# Edit scripts/secrets.py and add your Neon DATABASE_URL
+cp player_universe_load/secrets.py.template player_universe_load/secrets.py
+# Edit player_universe_load/secrets.py and add your Neon DATABASE_URL
 ```
 
-**Connection parameters (stored in `scripts/secrets.py`):**
+**Connection parameters (stored in `player_universe_load/secrets.py`):**
 ```python
 DATABASE_URL = "postgresql://user:password@host/database"
 ```
@@ -63,61 +63,69 @@ DATABASE_URL = "postgresql://user:password@host/database"
 
 ---
 
-## Scripts
+## Commands
 
-All scripts are in the `scripts/` directory.
+All functionality is available through the unified CLI.
 
-### Main Workflow Scripts
+### Main Workflow Commands
 
-#### 1. `load_local.py` (Step 1)
-Loads all data to local PostgreSQL database.
+#### 1. `load-and-sync` (Recommended)
+Full workflow: load locally and sync to Neon in one command.
 
 ```bash
-uv run python scripts/load_local.py
+uv run player-universe-load load-and-sync
 ```
 
 **What it does:**
-- Overrides DATABASE_URL to use `postgresql://localhost/fantasy_baseball`
+- Loads all data to local PostgreSQL
+- Exports local database with `pg_dump`
+- Uploads to Neon with `psql`
+- **Total time: ~3 minutes**
+
+#### 2. `load-local`
+Loads all data to local PostgreSQL database only.
+
+```bash
+uv run player-universe-load load-local
+```
+
+**What it does:**
+- Connects to `postgresql://localhost/fantasy_baseball`
+- Validates data schema against database schema
 - Drops and recreates all 12 tables
 - Loads players, stats, projections, valuations
 - Loads league, teams, matchups, rosters
+- Shows real-time progress
 - **Completes in ~30 seconds**
 
-#### 2. `export_and_upload.sh` (Step 2)
+#### 3. `sync-to-neon`
 Exports local database and uploads to Neon.
 
 ```bash
-bash scripts/export_and_upload.sh
+uv run player-universe-load sync-to-neon
 ```
 
 **What it does:**
 - Uses `pg_dump --clean --if-exists` to export local database
 - Creates `/tmp/fantasy_baseball_dump.sql` (~10MB)
-- Reads Neon DATABASE_URL from `scripts/secrets.py`
+- Reads Neon DATABASE_URL from `player_universe_load/secrets.py`
 - Uses `psql` to restore dump to Neon
 - Cleans up temporary dump file
 - **Completes in ~2-3 minutes**
 
-### Utility Scripts
+### Utility Commands
 
-#### 3. `verify_table.py`
+#### 4. `verify`
 Verify database structure and query capabilities.
 
 ```bash
-uv run python scripts/verify_table.py
+uv run player-universe-load verify
 ```
 
 Shows:
 - Table structure (columns, types)
 - Sample queries
 - Player counts by team/position
-
-#### 4. `test_connection.py`
-Test database connectivity.
-
-```bash
-uv run python scripts/test_connection.py
-```
 
 ---
 
@@ -218,7 +226,7 @@ brew services start postgresql@18
 
 **Check secrets file exists:**
 ```bash
-cat scripts/secrets.py
+cat player_universe_load/secrets.py
 # Should show: DATABASE_URL = "postgresql://..."
 ```
 
@@ -318,13 +326,13 @@ To refresh with updated fixture data:
 # 1. Update fixture JSON files in tests/fixtures/
 
 # 2. Reload local database
-uv run python scripts/load_local.py
+uv run player-universe-load load-local
 
 # 3. Verify locally
 /opt/homebrew/opt/postgresql@18/bin/psql fantasy_baseball
 
 # 4. Upload to Neon when ready
-bash scripts/export_and_upload.sh
+uv run player-universe-load sync-to-neon
 ```
 
 ### Schema Changes
@@ -335,13 +343,13 @@ To modify the database schema:
 # 1. Edit schema files in player_universe_load/schemas/
 
 # 2. Test locally
-uv run python scripts/load_local.py
+uv run player-universe-load load-local
 
 # 3. Query and verify changes
 /opt/homebrew/opt/postgresql@18/bin/psql fantasy_baseball
 
 # 4. Upload to Neon when satisfied
-bash scripts/export_and_upload.sh
+uv run player-universe-load sync-to-neon
 ```
 
 ### Backup Local Database
@@ -373,7 +381,7 @@ bash scripts/export_and_upload.sh
 
 ### Connect Hasura to Neon
 
-1. **Get Neon connection string** from `scripts/secrets.py`
+1. **Get Neon connection string** from `player_universe_load/secrets.py`
 2. **Add to Hasura** as new PostgreSQL data source
 3. **Track all tables** in Hasura console
 4. **Relationships auto-detected** via foreign keys
@@ -422,14 +430,14 @@ query GetTopPlayers {
 ### For Schema Changes
 
 1. Edit `player_universe_load/schemas/*.sql`
-2. Run `uv run python scripts/load_local.py`
+2. Run `uv run player-universe-load load-local`
 3. Test queries locally
-4. Run `bash scripts/export_and_upload.sh` when ready
+4. Run `uv run player-universe-load sync-to-neon` when ready
 
 ### For Data Loader Changes
 
 1. Edit files in `player_universe_load/loaders/`
-2. Run `uv run python scripts/load_local.py`
+2. Run `uv run player-universe-load load-local`
 3. Verify data loaded correctly
 4. Run integration tests: `uv run pytest tests/test_load_integration.py -v`
 5. Upload to Neon when ready
@@ -437,9 +445,9 @@ query GetTopPlayers {
 ### For New Fixture Data
 
 1. Update JSON files in `tests/fixtures/`
-2. Run `uv run python scripts/load_local.py`
+2. Run `uv run player-universe-load load-local`
 3. Verify new data appears
-4. Upload to Neon: `bash scripts/export_and_upload.sh`
+4. Upload to Neon: `uv run player-universe-load sync-to-neon`
 
 ---
 
@@ -450,21 +458,20 @@ Player_Universe_Load/
 ├── player_universe_load/       # Main Python package
 │   ├── schemas/                # SQL schema files (01-12)
 │   ├── loaders/                # Data loaders
+│   ├── validation/             # Schema validation
+│   ├── cli.py                  # CLI commands
 │   ├── db.py                   # Database utilities
-│   └── __main__.py             # Entry point
-├── scripts/                    # Executable scripts
-│   ├── load_local.py          # Local load script
-│   ├── export_and_upload.sh   # Neon upload script
-│   ├── verify_table.py        # Verification
-│   └── secrets.py             # DB credentials (gitignored)
+│   ├── verification.py         # Database verification
+│   ├── __main__.py             # Entry point
+│   └── secrets.py              # DB credentials (gitignored)
 ├── tests/
-│   ├── fixtures/              # JSON data files
+│   ├── fixtures/               # JSON data files
 │   └── test_load_integration.py
 ├── docs/
 │   └── postgres_schema_design.md
 ├── README.md                   # Main documentation
-├── QUICK_START.md             # Quick reference
-└── CLAUDE.md                  # This file
+├── QUICK_START.md              # Quick reference
+└── CLAUDE.md                   # This file
 ```
 
 ---
