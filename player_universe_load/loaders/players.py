@@ -95,7 +95,6 @@ def load_players(conn, data: list[dict[str, Any]], season_id: int = 2025) -> dic
             val = player["valuations"]
             valuation_rows.append((
                 player["id_espn"],
-                None,  # league_id (NULL for universal valuations)
                 season_id,
                 val.get("primary_position"),
                 val.get("tier"),
@@ -163,7 +162,7 @@ def load_players(conn, data: list[dict[str, Any]], season_id: int = 2025) -> dic
 
     if valuation_rows:
         counts["valuations"] = bulk_insert(conn, "player_valuations",
-            ["player_id", "league_id", "season_id", "primary_position", "tier", "total_z", "total_dollars"],
+            ["player_id", "season_id", "primary_position", "tier", "total_z", "total_dollars"],
             valuation_rows
         )
 
@@ -171,9 +170,10 @@ def load_players(conn, data: list[dict[str, Any]], season_id: int = 2025) -> dic
         with conn.cursor() as cur:
             for player in data:
                 if "valuations" in player and "z_scores" in player["valuations"]:
+                    # Match by player_id, season_id, AND primary_position to handle two-way players
                     cur.execute(
-                        "SELECT id FROM player_valuations WHERE player_id = %s AND season_id = %s AND league_id IS NULL",
-                        (player["id_espn"], season_id)
+                        "SELECT id FROM player_valuations WHERE player_id = %s AND season_id = %s AND primary_position = %s",
+                        (player["id_espn"], season_id, player["valuations"].get("primary_position"))
                     )
                     result = cur.fetchone()
                     if result:
