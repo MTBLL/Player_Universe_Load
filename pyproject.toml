@@ -1,16 +1,23 @@
 [project]
 name = "player-universe-load"
-version = "0.1.0"
-description = "This loads a local transformed Player Universe (combined ESPN + Fangraphs) from json and uploads it as a postgres database hosted by AWS."
+version = "0.2.0"
+description = "This loads a local transformed Player Universe (combined ESPN + Fangraphs) from json and uploads it as a hosted postgres database."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "psycopg2>=2.9.10",
+    "psycopg2-binary>=2.9.10",
     "pydantic>=2.11.4",
 ]
+
+[project.scripts]
+player-universe-load = "player_universe_load.cli:main"
 
 [dependency-groups]
 dev = [
     "mypy>=1.15.0",
     "types-psycopg2>=2.9.21.20250318",
+    "pytest>=8.3.4",
 ]
+
+[tool.uv]
+package = true

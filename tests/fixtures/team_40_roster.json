@@ -1,0 +1,530 @@
+{
+  "league_id": 10998,
+  "season_id": 2025,
+  "team_id": 40,
+  "team_name": "john's Finest Team",
+  "team_abbrev": "JFT",
+  "team_logo": "https://g.espncdn.com/lm-static/logo-packs/flb/team-kinney-martin-laksman/kinny_Baseball-01.svg",
+  "owners": [
+    "{987E572A-5B28-4A44-BE57-2A5B28EA44D4}"
+  ],
+  "primary_owner": "{987E572A-5B28-4A44-BE57-2A5B28EA44D4}",
+  "record": {
+    "wins": 58,
+    "losses": 92,
+    "ties": 6,
+    "percentage": 0.391025641025641,
+    "games_back": 37.0
+  },
+  "transactions": {
+    "budget_spent": 77,
+    "budget_remaining": 73,
+    "acquisitions": 30,
+    "drops": 27,
+    "trades": 2,
+    "waiver_rank": 2
+  },
+  "c": {
+    "player_id": 4416591,
+    "name": "Hunter Goodman",
+    "first_name": "Hunter",
+    "last_name": "Goodman",
+    "pro_team": "TB",
+    "primary_position": "RF",
+    "eligible_positions": [
+      "C",
+      "DH",
+      "OF",
+      "UTIL",
+      "BENCH",
+      "IL"
+    ],
+    "lineup_slot": "C",
+    "acquisition_type": "ADD",
+    "acquisition_date": "2025-05-02T09:00:04.555000Z",
+    "injury_status": "ACTIVE",
+    "active": true,
+    "keeper_value": 0
+  },
+  "first_base": {
+    "player_id": 30951,
+    "name": "Bryce Harper",
+    "first_name": "Bryce",
+    "last_name": "Harper",
+    "pro_team": "PHI",
+    "primary_position": "3B",
+    "eligible_positions": [
+      "1B",
+      "CI",
+      "IF",
+      "UTIL",
+      "BENCH",
+      "IL"
+    ],
+    "lineup_slot": "1B",
+    "acquisition_type": "DRAFT",
+    "acquisition_date": "2025-03-29T11:37:09.282000Z",
+    "injury_status": "ACTIVE",
+    "active": true,
+    "keeper_value": 38
+  },
+  "second_base": {
+    "player_id": 31606,
+    "name": "Xander Bogaerts",
+    "first_name": "Xander",
+    "last_name": "Bogaerts",
+    "pro_team": "SD",
+    "primary_position": "SS",
+    "eligible_positions": [
+      "2B",
+      "SS",
+      "MI",
+      "IF",
+      "UTIL",
+      "BENCH",
+      "IL"
+    ],
+    "lineup_slot": "2B",
+    "acquisition_type": "ADD",
+    "acquisition_date": "2025-07-18T09:00:05.947000Z",
+    "injury_status": "ACTIVE",
+    "active": true,
+    "keeper_value": 0
+  },
+  "third_base": {
+    "player_id": 4905921,
+    "name": "Junior Caminero",
+    "first_name": "Junior",
+    "last_name": "Caminero",
+    "pro_team": "CHW",
+    "primary_position": "OF",
+    "eligible_positions": [
+      "3B",
+      "CI",
+      "IF",
+      "UTIL",
+      "BENCH",
+      "IL"
+    ],
+    "lineup_slot": "3B",
+    "acquisition_type": "DRAFT",
+    "acquisition_date": "2025-03-29T11:37:09.283000Z",
+    "injury_status": "ACTIVE",
+    "active": true,
+    "keeper_value": 0
+  },
+  "shortstop": {
+    "player_id": 38904,
+    "name": "Bo Bichette",
+    "first_name": "Bo",
+    "last_name": "Bichette",
+    "pro_team": "FA",
+    "primary_position": "MI",
+    "eligible_positions": [
+      "SS",
+      "MI",
+      "IF",
+      "UTIL",
+      "BENCH",
+      "IL"
+    ],
+    "lineup_slot": "SS",
+    "acquisition_type": "DRAFT",
+    "acquisition_date": "2025-03-29T11:37:09.283000Z",
+    "injury_status": "ACTIVE",
+    "active": true,
+    "keeper_value": 0
+  },
+  "util": {
+    "player_id": 33712,
+    "name": "Kyle Schwarber",
+    "first_name": "Kyle",
+    "last_name": "Schwarber",
+    "pro_team": "PHI",
+    "primary_position": "DH",
+    "eligible_positions": [
+      "UTIL",
+      "BENCH",
+      "IL"
+    ],
+    "lineup_slot": "UTIL",
+    "acquisition_type": "DRAFT",
+    "acquisition_date": "2025-03-29T11:37:09.282000Z",
+    "injury_status": "ACTIVE",
+    "active": true,
+    "keeper_value": 27
+  },
+  "outfield": [
+    {
+      "player_id": 41996,
+      "name": "Steven Kwan",
+      "first_name": "Steven",
+      "last_name": "Kwan",
+      "pro_team": "CHC",
+      "primary_position": "CI",
+      "eligible_positions": [
+        "LF",
+        "OF",
+        "UTIL",
+        "BENCH",
+        "IL"
+      ],
+      "lineup_slot": "OF",
+      "acquisition_type": "DRAFT",
+      "acquisition_date": "2025-03-29T11:37:09.283000Z",
+      "injury_status": "ACTIVE",
+      "active": true,
+      "keeper_value": 1
+    },
+    {
+      "player_id": 41773,
+      "name": "Brendan Donovan",
+      "first_name": "Brendan",
+      "last_name": "Donovan",
+      "pro_team": "STL",
+      "primary_position": "CI",
+      "eligible_positions": [
+        "2B",
+        "MI",
+        "IF",
+        "LF",
+        "OF",
+        "UTIL",
+        "BENCH",
+        "IL"
+      ],
+      "lineup_slot": "OF",
+      "acquisition_type": "ADD",
+      "acquisition_date": "2025-03-31T09:00:21.460000Z",
+      "injury_status": "ACTIVE",
+      "active": true,
+      "keeper_value": 2
+    },
+    {
+      "player_id": 42664,
+      "name": "Jake Mangum",
+      "first_name": "Jake",
+      "last_name": "Mangum",
+      "pro_team": "PIT",
+      "primary_position": "LF",
+      "eligible_positions": [
+        "LF",
+        "RF",
+        "OF",
+        "UTIL",
+        "BENCH",
+        "IL",
+        "DH"
+      ],
+      "lineup_slot": "OF",
+      "acquisition_type": "ADD",
+      "acquisition_date": "2025-07-19T09:00:25.557000Z",
+      "injury_status": "ACTIVE",
+      "active": true,
+      "keeper_value": 0
+    }
+  ],
+  "sp": [
+    {
+      "player_id": 34943,
+      "name": "Dylan Cease",
+      "first_name": "Dylan",
+      "last_name": "Cease",
+      "pro_team": "HOU",
+      "primary_position": "1B",
+      "eligible_positions": [
+        "SP",
+        "BENCH",
+        "IL"
+      ],
+      "lineup_slot": "SP",
+      "acquisition_type": "DRAFT",
+      "acquisition_date": "2025-03-29T11:37:09.282000Z",
+      "injury_status": "ACTIVE",
+      "active": true,
+      "keeper_value": 11
+    },
+    {
+      "player_id": 35394,
+      "name": "Edwin Diaz",
+      "first_name": "Edwin",
+      "last_name": "Diaz",
+      "pro_team": "MIN",
+      "primary_position": "UTIL",
+      "eligible_positions": [
+        "SP",
+        "RP",
+        "BENCH",
+        "IL"
+      ],
+      "lineup_slot": "SP",
+      "acquisition_type": "DRAFT",
+      "acquisition_date": "2025-03-29T11:37:09.283000Z",
+      "injury_status": "ACTIVE",
+      "active": true,
+      "keeper_value": 14
+    },
+    {
+      "player_id": 40973,
+      "name": "Jose Soriano",
+      "first_name": "Jose",
+      "last_name": "Soriano",
+      "pro_team": "BAL",
+      "primary_position": "1B",
+      "eligible_positions": [
+        "SP",
+        "BENCH",
+        "IL"
+      ],
+      "lineup_slot": "SP",
+      "acquisition_type": "ADD",
+      "acquisition_date": "2025-03-31T09:00:21.458000Z",
+      "injury_status": "OUT",
+      "active": true,
+      "keeper_value": 10
+    },
+    {
+      "player_id": 33722,
+      "name": "Mitch Keller",
+      "first_name": "Mitch",
+      "last_name": "Keller",
+      "pro_team": "PIT",
+      "primary_position": "1B",
+      "eligible_positions": [
+        "SP",
+        "BENCH",
+        "IL"
+      ],
+      "lineup_slot": "SP",
+      "acquisition_type": "ADD",
+      "acquisition_date": "2025-06-23T09:00:05.968000Z",
+      "injury_status": "ACTIVE",
+      "active": true,
+      "keeper_value": 6
+    },
+    {
+      "player_id": 4187661,
+      "name": "Hunter Gaddis",
+      "first_name": "Hunter",
+      "last_name": "Gaddis",
+      "pro_team": "CHC",
+      "primary_position": "UTIL",
+      "eligible_positions": [
+        "SP",
+        "RP",
+        "BENCH",
+        "IL"
+      ],
+      "lineup_slot": "SP",
+      "acquisition_type": "ADD",
+      "acquisition_date": "2025-07-29T09:00:03.203000Z",
+      "injury_status": "ACTIVE",
+      "active": true,
+      "keeper_value": 0
+    }
+  ],
+  "rp": [
+    {
+      "player_id": 32760,
+      "name": "Josh Hader",
+      "first_name": "Josh",
+      "last_name": "Hader",
+      "pro_team": "KC",
+      "primary_position": "UTIL",
+      "eligible_positions": [
+        "SP",
+        "RP",
+        "BENCH",
+        "IL"
+      ],
+      "lineup_slot": "RP",
+      "acquisition_type": "DRAFT",
+      "acquisition_date": "2025-03-29T11:37:09.282000Z",
+      "injury_status": "ACTIVE",
+      "active": true,
+      "keeper_value": 21
+    },
+    {
+      "player_id": 4730225,
+      "name": "Mason Miller",
+      "first_name": "Mason",
+      "last_name": "Miller",
+      "pro_team": "SD",
+      "primary_position": "UTIL",
+      "eligible_positions": [
+        "SP",
+        "RP",
+        "BENCH",
+        "IL"
+      ],
+      "lineup_slot": "RP",
+      "acquisition_type": "DRAFT",
+      "acquisition_date": "2025-03-29T11:37:09.283000Z",
+      "injury_status": "ACTIVE",
+      "active": true,
+      "keeper_value": 3
+    }
+  ],
+  "bench": [
+    {
+      "player_id": 33190,
+      "name": "Tyler Glasnow",
+      "first_name": "Tyler",
+      "last_name": "Glasnow",
+      "pro_team": "MIN",
+      "primary_position": "1B",
+      "eligible_positions": [
+        "SP",
+        "BENCH",
+        "IL"
+      ],
+      "lineup_slot": "BENCH",
+      "acquisition_type": "DRAFT",
+      "acquisition_date": "2025-03-29T11:37:09.283000Z",
+      "injury_status": "ACTIVE",
+      "active": true,
+      "keeper_value": 18
+    },
+    {
+      "player_id": 33748,
+      "name": "Blake Snell",
+      "first_name": "Blake",
+      "last_name": "Snell",
+      "pro_team": "MIN",
+      "primary_position": "1B",
+      "eligible_positions": [
+        "SP",
+        "BENCH",
+        "IL"
+      ],
+      "lineup_slot": "BENCH",
+      "acquisition_type": "DRAFT",
+      "acquisition_date": "2025-03-29T11:37:09.283000Z",
+      "injury_status": "ACTIVE",
+      "active": true,
+      "keeper_value": 0
+    },
+    {
+      "player_id": 33837,
+      "name": "Jack Flaherty",
+      "first_name": "Jack",
+      "last_name": "Flaherty",
+      "pro_team": "CIN",
+      "primary_position": "1B",
+      "eligible_positions": [
+        "SP",
+        "BENCH",
+        "IL"
+      ],
+      "lineup_slot": "BENCH",
+      "acquisition_type": "TRADE",
+      "acquisition_date": "2025-04-02T17:10:01.242000Z",
+      "injury_status": "ACTIVE",
+      "active": true,
+      "keeper_value": 0
+    },
+    {
+      "player_id": 34401,
+      "name": "Matthew Boyd",
+      "first_name": "Matthew",
+      "last_name": "Boyd",
+      "pro_team": "LAD",
+      "primary_position": "1B",
+      "eligible_positions": [
+        "SP",
+        "BENCH",
+        "IL"
+      ],
+      "lineup_slot": "BENCH",
+      "acquisition_type": "ADD",
+      "acquisition_date": "2025-04-07T09:00:24.419000Z",
+      "injury_status": "ACTIVE",
+      "active": true,
+      "keeper_value": 0
+    },
+    {
+      "player_id": 4679983,
+      "name": "Chandler Simpson",
+      "first_name": "Chandler",
+      "last_name": "Simpson",
+      "pro_team": "CHW",
+      "primary_position": "LF",
+      "eligible_positions": [
+        "LF",
+        "RF",
+        "OF",
+        "UTIL",
+        "BENCH",
+        "IL"
+      ],
+      "lineup_slot": "BENCH",
+      "acquisition_type": "ADD",
+      "acquisition_date": "2025-07-30T09:00:07.779000Z",
+      "injury_status": "ACTIVE",
+      "active": true,
+      "keeper_value": 0
+    }
+  ],
+  "injured_list": [
+    {
+      "player_id": 41743,
+      "name": "Emmanuel Clase",
+      "first_name": "Emmanuel",
+      "last_name": "Clase",
+      "pro_team": "CHC",
+      "primary_position": "UTIL",
+      "eligible_positions": [
+        "SP",
+        "RP",
+        "BENCH",
+        "IL"
+      ],
+      "lineup_slot": "IL",
+      "acquisition_type": "DRAFT",
+      "acquisition_date": "2025-03-29T11:37:09.282000Z",
+      "injury_status": "OUT",
+      "active": true,
+      "keeper_value": 16
+    },
+    {
+      "player_id": 34973,
+      "name": "Tyler Mahle",
+      "first_name": "Tyler",
+      "last_name": "Mahle",
+      "pro_team": "FA",
+      "primary_position": "1B",
+      "eligible_positions": [
+        "SP",
+        "BENCH",
+        "IL"
+      ],
+      "lineup_slot": "IL",
+      "acquisition_type": "ADD",
+      "acquisition_date": "2025-04-16T09:00:18.685000Z",
+      "injury_status": "ACTIVE",
+      "active": true,
+      "keeper_value": 0
+    },
+    {
+      "player_id": 36020,
+      "name": "TJ Friedl",
+      "first_name": "TJ",
+      "last_name": "Friedl",
+      "pro_team": "LAA",
+      "primary_position": "LF",
+      "eligible_positions": [
+        "RF",
+        "OF",
+        "UTIL",
+        "BENCH",
+        "IL"
+      ],
+      "lineup_slot": "IL",
+      "acquisition_type": "ADD",
+      "acquisition_date": "2025-05-28T09:00:27.474000Z",
+      "injury_status": "ACTIVE",
+      "active": true,
+      "keeper_value": 0
+    }
+  ]
+}

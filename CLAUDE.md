@@ -1,193 +1,483 @@
 # Player Universe Load - Setup and Usage Guide
 
+## Quick Start
+
+**Fast local-first loading workflow:**
+
+```bash
+# 1. Load to local PostgreSQL (30 seconds)
+uv run player-universe-load load-local
+
+# 2. Export and upload to Neon (2-3 minutes)
+uv run player-universe-load sync-to-neon
+```
+
+**Total time: ~3 minutes** (vs 60+ minutes for direct remote loading!)
+
+See **[QUICK_START.md](QUICK_START.md)** for detailed instructions.
+
+---
+
 ## Configuration Details
 
-### Initial Setup
+### Local PostgreSQL Setup
 
-Before running any scripts, you need to set up the database credentials:
+**Install and start PostgreSQL 18:**
+```bash
+brew install postgresql@18
+brew services start postgresql@18
+```
 
-1. Copy the template file to create your secrets file:
-   ```bash
-   cp scripts/secrets.py.template scripts/secrets.py
-   ```
+**Create local database:**
+```bash
+/opt/homebrew/opt/postgresql@18/bin/createdb fantasy_baseball
+```
 
-2. Edit the `scripts/secrets.py` file and add your database password:
-   ```python
-   DB_PASSWORD = "your_database_password_here"
-   ```
-
-> **Important**: The `secrets.py` file contains sensitive credentials and is excluded from version control via `.gitignore`. Never commit this file to the repository.
-
-### Database Connection Parameters
-- **Host**: mtbl.chigsmi0ar1o.us-west-1.rds.amazonaws.com
+**Connection:**
+- **Host**: localhost
 - **Port**: 5432 (default)
-- **Database Name**: mtbl
-- **Username**: mtbl
-- **Password**: [stored in secrets.py file - see Initial Setup section]
+- **Database Name**: fantasy_baseball
+- **Connection String**: `postgresql://localhost/fantasy_baseball`
+
+### Neon (Remote) Setup
+
+**Copy template and configure:**
+```bash
+cp player_universe_load/secrets.py.template player_universe_load/secrets.py
+# Edit player_universe_load/secrets.py and add your Neon DATABASE_URL
+```
+
+**Connection parameters (stored in `player_universe_load/secrets.py`):**
+```python
+DATABASE_URL = "postgresql://user:password@host/database"
+```
 
 ### Data Source
-- **JSON File Path**: `/Users/Shared/BaseballHQ/resources/transform/player_universe_trxd.json`
-- **Table Name**: players
 
-## Scripts
+**Fixture files in** `tests/fixtures/`:
+- `hitters.json` - 1,405 hitters with full stats
+- `pitchers.json` - 1,535 pitchers with full stats
+- `league_10998_summary.json` - League configuration
+- `league_10998_schedule.json` - Matchups/schedule
+- `team_*_roster.json` - 11 team rosters
 
-All scripts have been moved to the `scripts` directory for better organization. You can use the unified run.py script to execute the main functions:
+---
 
-### Main Script Runner
+## Commands
 
-The `run.py` script provides a unified interface to all tools:
+All functionality is available through the unified CLI.
+
+### Main Workflow Commands
+
+#### 1. `load-and-sync` (Recommended)
+Full workflow: load locally and sync to Neon in one command.
 
 ```bash
-cd /Users/Shared/BaseballHQ/tools/_load/Player_Universe_Load
-source .venv/bin/activate
-
-# Load data
-python3 scripts/run.py load
-
-# Verify database
-python3 scripts/run.py verify
-
-# Create database
-python3 scripts/run.py create-db
+uv run player-universe-load load-and-sync
 ```
 
-### Individual Scripts
+**What it does:**
+- Loads all data to local PostgreSQL
+- Exports local database with `pg_dump`
+- Uploads to Neon with `psql`
+- **Total time: ~3 minutes**
 
-#### 1. `clean_and_load.py` (Recommended)
-The simplest script that drops the existing table and creates a new one with proper structure:
+#### 2. `load-local`
+Loads all data to local PostgreSQL database only.
+
 ```bash
-cd /Users/Shared/BaseballHQ/tools/_load/Player_Universe_Load
-source .venv/bin/activate
-python3 scripts/clean_and_load.py
+uv run player-universe-load load-local
 ```
 
-#### 2. `verify_table.py`
-A utility to verify the table structure and query capabilities:
+**What it does:**
+- Connects to `postgresql://localhost/fantasy_baseball`
+- Validates data schema against database schema
+- Drops and recreates all 12 tables
+- Loads players, stats, projections, valuations
+- Loads league, teams, matchups, rosters
+- Shows real-time progress
+- **Completes in ~30 seconds**
+
+#### 3. `sync-to-neon`
+Exports local database and uploads to Neon.
+
 ```bash
-cd /Users/Shared/BaseballHQ/tools/_load/Player_Universe_Load
-source .venv/bin/activate
-python3 scripts/verify_table.py
+uv run player-universe-load sync-to-neon
 ```
 
-#### 3. `test_connection.py`
-Script to test database connectivity:
+**What it does:**
+- Uses `pg_dump --clean --if-exists` to export local database
+- Creates `/tmp/fantasy_baseball_dump.sql` (~10MB)
+- Reads Neon DATABASE_URL from `player_universe_load/secrets.py`
+- Uses `psql` to restore dump to Neon
+- Cleans up temporary dump file
+- **Completes in ~2-3 minutes**
+
+### Utility Commands
+
+#### 4. `verify`
+Verify database structure and query capabilities.
+
 ```bash
-cd /Users/Shared/BaseballHQ/tools/_load/Player_Universe_Load
-source .venv/bin/activate
-python3 scripts/test_connection.py
+uv run player-universe-load verify
 ```
 
-#### 4. `create_database.py`
-Script to create the mtbl database if it doesn't exist:
-```bash
-cd /Users/Shared/BaseballHQ/tools/_load/Player_Universe_Load
-source .venv/bin/activate
-python3 scripts/create_database.py
-```
+Shows:
+- Table structure (columns, types)
+- Sample queries
+- Player counts by team/position
 
-#### 5. `detailed_connection_test.py`
-Detailed connection test with specific diagnostics:
-```bash
-cd /Users/Shared/BaseballHQ/tools/_load/Player_Universe_Load
-source .venv/bin/activate
-python3 scripts/detailed_connection_test.py
-```
+---
+
+## Database Structure
+
+### Tables (12 total)
+
+All tables have foreign keys for Hasura auto-relationship detection.
+
+**Core entities:**
+1. **players** - Player biographical data
+   - Primary key: `id_espn`
+   - Indexes: name, position, team, active status
+
+2. **leagues** - League configuration
+   - Primary key: `league_id`
+
+3. **teams** - Fantasy teams with records
+   - Primary key: `team_id`
+   - Foreign key: `league_id` → leagues
+
+4. **matchups** - Head-to-head schedule
+   - Primary key: `matchup_id`
+   - Foreign keys: `league_id`, `team1_id`, `team2_id`, `winner_id`
+
+**Roster management:**
+5. **roster_slots** - Player assignments to team positions
+   - Foreign keys: `team_id`, `player_id`, `league_id`
+
+6. **league_scoring_categories** - League scoring rules
+   - Foreign key: `league_id`
+
+7. **player_fantasy_assignments** - Draft/ownership info
+   - Foreign keys: `player_id`, `league_id`, `team_id`
+
+**Statistics:**
+8. **player_stats_batting** - Batting statistics
+   - Foreign key: `player_id`
+   - Unique: (player_id, season_id, stat_period)
+   - ~66 stat columns (AVG, HR, RBI, SB, etc.)
+
+9. **player_stats_pitching** - Pitching statistics
+   - Foreign key: `player_id`
+   - Unique: (player_id, season_id, stat_period)
+   - ~70 stat columns (ERA, WHIP, K, SV, etc.)
+
+**Analytics:**
+10. **player_projections** - FanGraphs projections
+    - Foreign key: `player_id`
+    - Stored as JSONB for flexibility
+
+11. **player_valuations** - Fantasy value calculations
+    - Foreign keys: `player_id`, `league_id` (optional)
+
+12. **player_valuation_details** - Per-category z-scores/dollars
+    - Foreign key: `valuation_id`
+
+### Key Schema Features
+
+**JSONB fields for flexibility:**
+- `eligible_slots` - Array of eligible positions
+- `birth_place` - Structured location data
+- `projections` - Full projection data from different systems
+- `roster_settings` - League-specific configurations
+
+**Proper indexing:**
+- Primary keys on all tables
+- Foreign key indexes for joins
+- Commonly queried fields (position, team, name)
+
+**Data integrity:**
+- Foreign key constraints with CASCADE/SET NULL
+- Unique constraints where needed
+- NOT NULL on critical fields only
+
+---
 
 ## Common Issues and Troubleshooting
 
-### RDS Connectivity Issues
-If you encounter connection timeouts:
-1. Check that the RDS security group allows connections from your IP address
-2. Your current IP address: Check with `curl -s https://api.ipify.org`
-3. Add this IP to the security group with port 5432 open
+### PostgreSQL Issues
+
+**PostgreSQL not running:**
+```bash
+brew services start postgresql@18
+```
+
+**Database doesn't exist:**
+```bash
+/opt/homebrew/opt/postgresql@18/bin/createdb fantasy_baseball
+```
+
+**Check if PostgreSQL is listening:**
+```bash
+/opt/homebrew/opt/postgresql@18/bin/psql -l
+```
+
+### Neon Connection Issues
+
+**Check secrets file exists:**
+```bash
+cat player_universe_load/secrets.py
+# Should show: DATABASE_URL = "postgresql://..."
+```
+
+**Test Neon connection:**
+```bash
+psql "$DATABASE_URL" -c "SELECT version();"
+```
+
+**Security group:** Verify Neon allows connections from your IP
 
 ### Data Loading Issues
-- For NULL/NOT NULL constraint violations, check the Pydantic model and PostgresLoader
-- The current implementation makes all fields nullable for compatibility
 
-## Database Structure
-The database contains a `players` table with `id_espn` as the primary key:
+**Constraint violations:**
+- Check fixture data for missing required fields
+- Verify foreign key relationships (teams before matchups, etc.)
+- Check for duplicate primary keys
 
-### Table Structure
+**Slow loading:**
+- Local load should be ~30 seconds
+- If slower, check PostgreSQL is running locally (not connecting to remote)
+- Check DATABASE_URL environment variable
+
+---
+
+## Database Queries
+
+### Connect to Local Database
+
+```bash
+/opt/homebrew/opt/postgresql@18/bin/psql fantasy_baseball
 ```
-Column Name            | Data Type           | Description
---------------------------------------------------------------------------------
-id_espn                | integer             | Primary key - ESPN player ID
-id_fangraphs           | character varying   | FanGraphs player ID
-id_xmlbam              | integer             | MLB MLBAM player ID
-name                   | character varying   | Full player name
-first_name             | character varying   | Player's first name
-last_name              | character varying   | Player's last name
-name_nonascii          | character varying   | Name with accents/special characters
-name_ascii             | character varying   | Name with ASCII characters only
-display_name           | character varying   | Name for display purposes
-short_name             | character varying   | Abbreviated name (e.g., "M. Trout")
-nickname               | character varying   | Player's nickname if any
-slug_espn              | character varying   | URL slug for ESPN
-slug_fangraphs         | character varying   | URL slug for FanGraphs
-fangraphs_api_route    | character varying   | API route for FanGraphs data
-primary_position       | character varying   | Primary fielding position
-eligible_slots         | text (JSON array)   | All eligible fantasy positions
-pro_team               | character varying   | MLB team abbreviation (e.g., "LAD")
-injury_status          | character varying   | Current injury status
-status                 | character varying   | Player status (active, etc.)
-injured                | boolean             | Whether player is injured
-active                 | boolean             | Whether player is active
-weight                 | numeric             | Player's weight in pounds
-display_weight         | character varying   | Formatted weight string
-height                 | integer             | Player's height in inches
-display_height         | character varying   | Formatted height string
-bats                   | character varying   | Batting handedness
-throws                 | character varying   | Throwing handedness
-date_of_birth          | character varying   | Player's birth date
-birth_place            | jsonb               | Birth place information
-debut_year             | integer             | MLB debut year
-jersey                 | integer             | Jersey number
-headshot               | character varying   | URL to player headshot image
-created_at             | timestamp           | Record creation timestamp
+
+### Useful SQL Queries
+
+**Player counts:**
+```sql
+SELECT COUNT(*) FROM players;
+SELECT COUNT(*) FROM player_stats_batting;
+SELECT COUNT(*) FROM player_stats_pitching;
 ```
+
+**Top home run hitters:**
+```sql
+SELECT p.name, p.pro_team, s."HR", s."AVG", s."RBI"
+FROM players p
+JOIN player_stats_batting s ON p.id_espn = s.player_id
+WHERE s.stat_period = 'current_season' AND s."HR" > 30
+ORDER BY s."HR" DESC
+LIMIT 10;
+```
+
+**Top strikeout pitchers:**
+```sql
+SELECT p.name, p.pro_team, s."K", s."ERA", s."WHIP"
+FROM players p
+JOIN player_stats_pitching s ON p.id_espn = s.player_id
+WHERE s.stat_period = 'current_season' AND s."K" > 200
+ORDER BY s."K" DESC
+LIMIT 10;
+```
+
+**Team rosters:**
+```sql
+SELECT t.team_name, COUNT(r.player_id) as roster_size
+FROM teams t
+LEFT JOIN roster_slots r ON t.team_id = r.team_id
+GROUP BY t.team_id, t.team_name
+ORDER BY roster_size DESC;
+```
+
+**Player valuations:**
+```sql
+SELECT p.name, v.total_dollars, v.tier, v.primary_position
+FROM players p
+JOIN player_valuations v ON p.id_espn = v.player_id
+WHERE v.total_dollars > 30
+ORDER BY v.total_dollars DESC
+LIMIT 20;
+```
+
+**League standings:**
+```sql
+SELECT team_name, wins, losses, ties, win_percentage, games_back
+FROM teams
+ORDER BY win_percentage DESC;
+```
+
+---
 
 ## Maintenance
 
 ### Refreshing Data
-To refresh the player data, simply run the `clean_and_load.py` script:
+
+To refresh with updated fixture data:
+
 ```bash
-cd /Users/Shared/BaseballHQ/tools/_load/Player_Universe_Load
-source .venv/bin/activate
-python3 clean_and_load.py
+# 1. Update fixture JSON files in tests/fixtures/
+
+# 2. Reload local database
+uv run player-universe-load load-local
+
+# 3. Verify locally
+/opt/homebrew/opt/postgresql@18/bin/psql fantasy_baseball
+
+# 4. Upload to Neon when ready
+uv run player-universe-load sync-to-neon
 ```
 
-This script will:
-1. Drop the existing table
-2. Create a new table with the correct structure
-3. Load all player data from the JSON file
+### Schema Changes
 
-### Connecting via psql
-To connect directly to the database using the PostgreSQL command-line client:
+To modify the database schema:
+
 ```bash
-psql -h mtbl.chigsmi0ar1o.us-west-1.rds.amazonaws.com -p 5432 -d mtbl -U mtbl
+# 1. Edit schema files in player_universe_load/schemas/
+
+# 2. Test locally
+uv run player-universe-load load-local
+
+# 3. Query and verify changes
+/opt/homebrew/opt/postgresql@18/bin/psql fantasy_baseball
+
+# 4. Upload to Neon when satisfied
+uv run player-universe-load sync-to-neon
 ```
 
-When prompted, enter your password (found in the `secrets.py` file)
+### Backup Local Database
 
-### Useful SQL Queries
-
-```sql
--- Get total player count
-SELECT COUNT(*) FROM players;
-
--- Get players by team
-SELECT * FROM players WHERE pro_team = 'LAD' LIMIT 10;
-
--- Get players by position
-SELECT * FROM players WHERE primary_position = 'SS' LIMIT 10;
-
--- Get players by name
-SELECT * FROM players WHERE name ILIKE '%trout%';
-
--- Get player by ESPN ID
-SELECT * FROM players WHERE id_espn = 32267;
-
--- Get player counts by team
-SELECT pro_team, COUNT(*) FROM players GROUP BY pro_team ORDER BY COUNT(*) DESC;
+```bash
+/opt/homebrew/opt/postgresql@18/bin/pg_dump fantasy_baseball > backup_$(date +%Y%m%d).sql
 ```
+
+### Restore from Backup
+
+```bash
+/opt/homebrew/opt/postgresql@18/bin/psql fantasy_baseball < backup_20260130.sql
+```
+
+---
+
+## Benefits of Local-First Workflow
+
+✅ **20x faster** - 3 minutes total vs 60+ minutes direct remote
+✅ **Instant iteration** - test schema changes in seconds locally
+✅ **Offline capable** - work without internet connection
+✅ **Easy debugging** - query local DB directly with psql
+✅ **Cost efficient** - minimize Neon compute time
+✅ **Production ready** - same data, same schema, same result
+
+---
+
+## Next Steps
+
+### Connect Hasura to Neon
+
+1. **Get Neon connection string** from `player_universe_load/secrets.py`
+2. **Add to Hasura** as new PostgreSQL data source
+3. **Track all tables** in Hasura console
+4. **Relationships auto-detected** via foreign keys
+5. **Start querying** with GraphQL!
+
+### Example Hasura GraphQL Query
+
+```graphql
+query GetTopPlayers {
+  players(
+    where: {
+      player_stats_batting: {
+        stat_period: {_eq: "current_season"}
+        HR: {_gt: 30}
+      }
+    }
+    order_by: {player_stats_batting_aggregate: {max: {HR: desc}}}
+    limit: 10
+  ) {
+    name
+    primary_position
+    pro_team
+    player_stats_batting(where: {stat_period: {_eq: "current_season"}}) {
+      HR
+      AVG
+      RBI
+      SB
+    }
+    player_valuations {
+      total_dollars
+      tier
+    }
+    roster_slots {
+      team {
+        team_name
+      }
+    }
+  }
+}
+```
+
+---
+
+## Development Workflow
+
+### For Schema Changes
+
+1. Edit `player_universe_load/schemas/*.sql`
+2. Run `uv run player-universe-load load-local`
+3. Test queries locally
+4. Run `uv run player-universe-load sync-to-neon` when ready
+
+### For Data Loader Changes
+
+1. Edit files in `player_universe_load/loaders/`
+2. Run `uv run player-universe-load load-local`
+3. Verify data loaded correctly
+4. Run integration tests: `uv run pytest tests/test_load_integration.py -v`
+5. Upload to Neon when ready
+
+### For New Fixture Data
+
+1. Update JSON files in `tests/fixtures/`
+2. Run `uv run player-universe-load load-local`
+3. Verify new data appears
+4. Upload to Neon: `uv run player-universe-load sync-to-neon`
+
+---
+
+## File Organization
+
+```
+Player_Universe_Load/
+├── player_universe_load/       # Main Python package
+│   ├── schemas/                # SQL schema files (01-12)
+│   ├── loaders/                # Data loaders
+│   ├── validation/             # Schema validation
+│   ├── cli.py                  # CLI commands
+│   ├── db.py                   # Database utilities
+│   ├── verification.py         # Database verification
+│   ├── __main__.py             # Entry point
+│   └── secrets.py              # DB credentials (gitignored)
+├── tests/
+│   ├── fixtures/               # JSON data files
+│   └── test_load_integration.py
+├── docs/
+│   └── postgres_schema_design.md
+├── README.md                   # Main documentation
+├── QUICK_START.md              # Quick reference
+└── CLAUDE.md                   # This file
+```
+
+---
+
+For the absolute fastest start, see **[QUICK_START.md](QUICK_START.md)**.
+
+For detailed architecture info, see **[README.md](README.md)**.
+
+For schema details, see **[docs/postgres_schema_design.md](docs/postgres_schema_design.md)**.

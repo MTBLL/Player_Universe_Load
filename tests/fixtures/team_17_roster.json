@@ -1,0 +1,505 @@
+{
+  "league_id": 10998,
+  "season_id": 2025,
+  "team_id": 17,
+  "team_name": "October's  Very Own",
+  "team_abbrev": "OVO",
+  "team_logo": "http://images.livemixtapes.com/artists/ovo/drake-6_god/cover.jpg",
+  "owners": [
+    "{F1061681-A897-4ECE-8616-81A8979ECE9C}"
+  ],
+  "primary_owner": "{F1061681-A897-4ECE-8616-81A8979ECE9C}",
+  "record": {
+    "wins": 80,
+    "losses": 69,
+    "ties": 7,
+    "percentage": 0.5352564102564102,
+    "games_back": 14.5
+  },
+  "transactions": {
+    "budget_spent": 150,
+    "budget_remaining": 0,
+    "acquisitions": 67,
+    "drops": 65,
+    "trades": 5,
+    "waiver_rank": 9
+  },
+  "c": {
+    "player_id": 31127,
+    "name": "Salvador Perez",
+    "first_name": "Salvador",
+    "last_name": "Perez",
+    "pro_team": "CLE",
+    "primary_position": "2B",
+    "eligible_positions": [
+      "C",
+      "1B",
+      "CI",
+      "IF",
+      "UTIL",
+      "BENCH",
+      "IL"
+    ],
+    "lineup_slot": "C",
+    "acquisition_type": "TRADE",
+    "acquisition_date": "2025-05-14T08:53:00.492000Z",
+    "injury_status": "OUT",
+    "active": true,
+    "keeper_value": 6
+  },
+  "first_base": {
+    "player_id": 33481,
+    "name": "Yandy Diaz",
+    "first_name": "Yandy",
+    "last_name": "Diaz",
+    "pro_team": "CHW",
+    "primary_position": "3B",
+    "eligible_positions": [
+      "1B",
+      "CI",
+      "IF",
+      "UTIL",
+      "BENCH",
+      "IL"
+    ],
+    "lineup_slot": "1B",
+    "acquisition_type": "ADD",
+    "acquisition_date": "2025-06-23T09:00:05.973000Z",
+    "injury_status": "ACTIVE",
+    "active": true,
+    "keeper_value": 0
+  },
+  "second_base": {
+    "player_id": 32512,
+    "name": "Ketel Marte",
+    "first_name": "Ketel",
+    "last_name": "Marte",
+    "pro_team": "NYY",
+    "primary_position": "SS",
+    "eligible_positions": [
+      "2B",
+      "MI",
+      "IF",
+      "UTIL",
+      "BENCH",
+      "IL"
+    ],
+    "lineup_slot": "2B",
+    "acquisition_type": "TRADE",
+    "acquisition_date": "2025-04-24T19:39:02.481000Z",
+    "injury_status": "ACTIVE",
+    "active": true,
+    "keeper_value": 21
+  },
+  "third_base": {
+    "player_id": 41034,
+    "name": "Mark Vientos",
+    "first_name": "Mark",
+    "last_name": "Vientos",
+    "pro_team": "NYM",
+    "primary_position": "OF",
+    "eligible_positions": [
+      "3B",
+      "CI",
+      "IF",
+      "UTIL",
+      "BENCH",
+      "IL"
+    ],
+    "lineup_slot": "3B",
+    "acquisition_type": "ADD",
+    "acquisition_date": "2025-08-26T09:00:05.094000Z",
+    "injury_status": "ACTIVE",
+    "active": true,
+    "keeper_value": 0
+  },
+  "shortstop": {
+    "player_id": 42403,
+    "name": "Bobby Witt Jr.",
+    "first_name": "Bobby",
+    "last_name": "Witt Jr.",
+    "pro_team": "CLE",
+    "primary_position": "MI",
+    "eligible_positions": [
+      "SS",
+      "MI",
+      "IF",
+      "UTIL",
+      "BENCH",
+      "IL"
+    ],
+    "lineup_slot": "SS",
+    "acquisition_type": "DRAFT",
+    "acquisition_date": "2025-03-29T11:37:09.282000Z",
+    "injury_status": "ACTIVE",
+    "active": true,
+    "keeper_value": 51
+  },
+  "util": {
+    "player_id": 39832,
+    "name": "Shohei Ohtani",
+    "first_name": "Shohei",
+    "last_name": "Ohtani",
+    "pro_team": "MIN",
+    "primary_position": "DH",
+    "eligible_positions": [
+      "UTIL",
+      "BENCH",
+      "IL",
+      "SP"
+    ],
+    "lineup_slot": "UTIL",
+    "acquisition_type": "DRAFT",
+    "acquisition_date": "2025-03-29T11:37:09.282000Z",
+    "injury_status": "ACTIVE",
+    "active": true,
+    "keeper_value": 51
+  },
+  "outfield": [
+    {
+      "player_id": 36969,
+      "name": "Juan Soto",
+      "first_name": "Juan",
+      "last_name": "Soto",
+      "pro_team": "NYM",
+      "primary_position": "RF",
+      "eligible_positions": [
+        "DH",
+        "OF",
+        "UTIL",
+        "BENCH",
+        "IL"
+      ],
+      "lineup_slot": "OF",
+      "acquisition_type": "DRAFT",
+      "acquisition_date": "2025-03-29T11:37:09.282000Z",
+      "injury_status": "ACTIVE",
+      "active": true,
+      "keeper_value": 58
+    },
+    {
+      "player_id": 32655,
+      "name": "Byron Buxton",
+      "first_name": "Byron",
+      "last_name": "Buxton",
+      "pro_team": "COL",
+      "primary_position": "LF",
+      "eligible_positions": [
+        "RF",
+        "OF",
+        "UTIL",
+        "BENCH",
+        "IL"
+      ],
+      "lineup_slot": "OF",
+      "acquisition_type": "ADD",
+      "acquisition_date": "2025-04-25T09:00:25.411000Z",
+      "injury_status": "ACTIVE",
+      "active": true,
+      "keeper_value": 0
+    },
+    {
+      "player_id": 41044,
+      "name": "Julio Rodriguez",
+      "first_name": "Julio",
+      "last_name": "Rodriguez",
+      "pro_team": "SEA",
+      "primary_position": "LF",
+      "eligible_positions": [
+        "RF",
+        "OF",
+        "UTIL",
+        "BENCH",
+        "IL"
+      ],
+      "lineup_slot": "OF",
+      "acquisition_type": "TRADE",
+      "acquisition_date": "2025-06-03T22:58:00.953000Z",
+      "injury_status": "ACTIVE",
+      "active": true,
+      "keeper_value": 50
+    }
+  ],
+  "sp": [
+    {
+      "player_id": 32145,
+      "name": "Jason Adam",
+      "first_name": "Jason",
+      "last_name": "Adam",
+      "pro_team": "SD",
+      "primary_position": "UTIL",
+      "eligible_positions": [
+        "SP",
+        "RP",
+        "BENCH",
+        "IL"
+      ],
+      "lineup_slot": "SP",
+      "acquisition_type": "ADD",
+      "acquisition_date": "2025-07-30T09:00:07.784000Z",
+      "injury_status": "OUT",
+      "active": true,
+      "keeper_value": 0
+    },
+    {
+      "player_id": 35241,
+      "name": "Sandy Alcantara",
+      "first_name": "Sandy",
+      "last_name": "Alcantara",
+      "pro_team": "TOR",
+      "primary_position": "1B",
+      "eligible_positions": [
+        "SP",
+        "BENCH",
+        "IL"
+      ],
+      "lineup_slot": "SP",
+      "acquisition_type": "ADD",
+      "acquisition_date": "2025-08-25T09:00:06.741000Z",
+      "injury_status": "ACTIVE",
+      "active": true,
+      "keeper_value": 0
+    },
+    {
+      "player_id": 32697,
+      "name": "Lucas Giolito",
+      "first_name": "Lucas",
+      "last_name": "Giolito",
+      "pro_team": "FA",
+      "primary_position": "1B",
+      "eligible_positions": [
+        "SP",
+        "BENCH",
+        "IL"
+      ],
+      "lineup_slot": "SP",
+      "acquisition_type": "ADD",
+      "acquisition_date": "2025-08-25T09:00:06.749000Z",
+      "injury_status": "ACTIVE",
+      "active": true,
+      "keeper_value": 0
+    },
+    {
+      "player_id": 4669425,
+      "name": "Ian Seymour",
+      "first_name": "Ian",
+      "last_name": "Seymour",
+      "pro_team": "CHW",
+      "primary_position": "1B",
+      "eligible_positions": [
+        "SP",
+        "BENCH",
+        "IL",
+        "RP"
+      ],
+      "lineup_slot": "SP",
+      "acquisition_type": "ADD",
+      "acquisition_date": "2025-08-30T09:00:06.050000Z",
+      "injury_status": "ACTIVE",
+      "active": true,
+      "keeper_value": 0
+    },
+    {
+      "player_id": 32640,
+      "name": "Michael Wacha",
+      "first_name": "Michael",
+      "last_name": "Wacha",
+      "pro_team": "CLE",
+      "primary_position": "1B",
+      "eligible_positions": [
+        "SP",
+        "BENCH",
+        "IL"
+      ],
+      "lineup_slot": "SP",
+      "acquisition_type": "ADD",
+      "acquisition_date": "2025-08-30T09:00:06.053000Z",
+      "injury_status": "ACTIVE",
+      "active": true,
+      "keeper_value": 0
+    }
+  ],
+  "rp": [
+    {
+      "player_id": 33770,
+      "name": "Luke Weaver",
+      "first_name": "Luke",
+      "last_name": "Weaver",
+      "pro_team": "NYM",
+      "primary_position": "UTIL",
+      "eligible_positions": [
+        "SP",
+        "RP",
+        "BENCH",
+        "IL"
+      ],
+      "lineup_slot": "RP",
+      "acquisition_type": "ADD",
+      "acquisition_date": "2025-08-13T09:00:13.487000Z",
+      "injury_status": "ACTIVE",
+      "active": true,
+      "keeper_value": 3
+    },
+    {
+      "player_id": 4630789,
+      "name": "Orion Kerkering",
+      "first_name": "Orion",
+      "last_name": "Kerkering",
+      "pro_team": "PHI",
+      "primary_position": "UTIL",
+      "eligible_positions": [
+        "SP",
+        "RP",
+        "BENCH",
+        "IL"
+      ],
+      "lineup_slot": "RP",
+      "acquisition_type": "ADD",
+      "acquisition_date": "2025-08-14T09:00:20.195000Z",
+      "injury_status": "ACTIVE",
+      "active": true,
+      "keeper_value": 0
+    }
+  ],
+  "bench": [
+    {
+      "player_id": 32175,
+      "name": "Robbie Ray",
+      "first_name": "Robbie",
+      "last_name": "Ray",
+      "pro_team": "SF",
+      "primary_position": "1B",
+      "eligible_positions": [
+        "SP",
+        "BENCH",
+        "IL"
+      ],
+      "lineup_slot": "BENCH",
+      "acquisition_type": "DRAFT",
+      "acquisition_date": "2025-03-29T11:37:09.283000Z",
+      "injury_status": "ACTIVE",
+      "active": true,
+      "keeper_value": 0
+    },
+    {
+      "player_id": 30948,
+      "name": "Chris Sale",
+      "first_name": "Chris",
+      "last_name": "Sale",
+      "pro_team": "MIA",
+      "primary_position": "1B",
+      "eligible_positions": [
+        "SP",
+        "BENCH",
+        "IL"
+      ],
+      "lineup_slot": "BENCH",
+      "acquisition_type": "TRADE",
+      "acquisition_date": "2025-04-15T10:32:00.798000Z",
+      "injury_status": "ACTIVE",
+      "active": true,
+      "keeper_value": 2
+    },
+    {
+      "player_id": 4311625,
+      "name": "Kyle Bradish",
+      "first_name": "Kyle",
+      "last_name": "Bradish",
+      "pro_team": "ATL",
+      "primary_position": "1B",
+      "eligible_positions": [
+        "SP",
+        "BENCH",
+        "IL"
+      ],
+      "lineup_slot": "BENCH",
+      "acquisition_type": "ADD",
+      "acquisition_date": "2025-07-21T09:00:12.239000Z",
+      "injury_status": "ACTIVE",
+      "active": true,
+      "keeper_value": 0
+    },
+    {
+      "player_id": 4995802,
+      "name": "Jared Koenig",
+      "first_name": "Jared",
+      "last_name": "Koenig",
+      "pro_team": "MIL",
+      "primary_position": "UTIL",
+      "eligible_positions": [
+        "SP",
+        "RP",
+        "BENCH",
+        "IL"
+      ],
+      "lineup_slot": "BENCH",
+      "acquisition_type": "ADD",
+      "acquisition_date": "2025-08-18T09:00:04.187000Z",
+      "injury_status": "ACTIVE",
+      "active": true,
+      "keeper_value": 0
+    },
+    {
+      "player_id": 33244,
+      "name": "Sean Manaea",
+      "first_name": "Sean",
+      "last_name": "Manaea",
+      "pro_team": "NYM",
+      "primary_position": "1B",
+      "eligible_positions": [
+        "SP",
+        "BENCH",
+        "IL"
+      ],
+      "lineup_slot": "BENCH",
+      "acquisition_type": "ADD",
+      "acquisition_date": "2025-08-25T09:00:06.754000Z",
+      "injury_status": "ACTIVE",
+      "active": true,
+      "keeper_value": 0
+    }
+  ],
+  "injured_list": [
+    {
+      "player_id": 41054,
+      "name": "Cole Ragans",
+      "first_name": "Cole",
+      "last_name": "Ragans",
+      "pro_team": "CLE",
+      "primary_position": "1B",
+      "eligible_positions": [
+        "SP",
+        "BENCH",
+        "IL"
+      ],
+      "lineup_slot": "IL",
+      "acquisition_type": "ADD",
+      "acquisition_date": "2025-05-01T09:00:12.109000Z",
+      "injury_status": "ACTIVE",
+      "active": true,
+      "keeper_value": 11
+    },
+    {
+      "player_id": 33303,
+      "name": "Max Muncy",
+      "first_name": "Max",
+      "last_name": "Muncy",
+      "pro_team": "MIN",
+      "primary_position": "OF",
+      "eligible_positions": [
+        "3B",
+        "CI",
+        "IF",
+        "UTIL",
+        "BENCH",
+        "IL"
+      ],
+      "lineup_slot": "IL",
+      "acquisition_type": "ADD",
+      "acquisition_date": "2025-06-03T09:00:05.758000Z",
+      "injury_status": "ACTIVE",
+      "active": true,
+      "keeper_value": 9
+    }
+  ]
+}
