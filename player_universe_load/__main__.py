@@ -3,6 +3,7 @@
 
 import json
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from .db import get_connection, init_schema
@@ -21,8 +22,11 @@ LOAD_DIR = Path("/Users/Shared/BaseballHQ/resources/load")
 FIXTURES_DIR = Path("tests/fixtures")
 
 
-def load_all():
+def load_all(year: int | None = None):
     """Load all data from ETL pipeline or test fixtures into the database."""
+    season_id = year or datetime.now().year
+    print(f"   📅 Season: {season_id}\n")
+
     # Determine which data source to use
     use_pipeline = TRANSFORM_DIR.exists() and LOAD_DIR.exists()
 
@@ -62,7 +66,7 @@ def load_all():
         if hitters_file.exists():
             print(f"   📄 Reading {hitters_file}")
             hitters = json.loads(hitters_file.read_text())
-            counts = load_players(conn, hitters, season_id=2025)
+            counts = load_players(conn, hitters, season_id=season_id)
             print(f"  ✓ Hitters: {counts['players']} players, {counts['batting']} stat records")
             print(f"    {counts['projections']} projections, {counts['valuations']} valuations")
         else:
@@ -71,7 +75,7 @@ def load_all():
         if pitchers_file.exists():
             print(f"   📄 Reading {pitchers_file}")
             pitchers = json.loads(pitchers_file.read_text())
-            counts = load_players(conn, pitchers, season_id=2025)
+            counts = load_players(conn, pitchers, season_id=season_id)
             print(f"  ✓ Pitchers: {counts['players']} players, {counts['pitching']} stat records")
             print(f"    {counts['projections']} projections, {counts['valuations']} valuations")
         else:

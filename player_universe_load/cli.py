@@ -8,7 +8,7 @@ import sys
 from .__main__ import load_all
 
 
-def load_local():
+def load_local(year: int | None = None):
     """Load data to local PostgreSQL database."""
     print("🏠 Loading to LOCAL PostgreSQL database...")
     print("   Connection: postgresql://localhost/fantasy_baseball\n")
@@ -16,7 +16,7 @@ def load_local():
     # Override to use local database
     os.environ["DATABASE_URL"] = "postgresql://localhost/fantasy_baseball"
 
-    load_all()
+    load_all(year=year)
 
 
 def sync_to_neon():
@@ -82,13 +82,13 @@ def sync_to_neon():
     print("✅ Sync to Neon complete!")
 
 
-def load_and_sync():
+def load_and_sync(year: int | None = None):
     """Load to local database and sync to Neon in one command."""
     print("🚀 Full workflow: Load local → Export → Upload to Neon\n")
     print("=" * 60)
 
     # Step 1: Load locally
-    load_local()
+    load_local(year=year)
 
     print("\n" + "=" * 60)
 
@@ -134,13 +134,19 @@ Examples:
         choices=["load-and-sync", "load-local", "sync-to-neon", "verify"],
         help="Command to execute",
     )
+    parser.add_argument(
+        "--year",
+        type=int,
+        default=None,
+        help="Season year to stamp on loaded rows (default: current year)",
+    )
 
     args = parser.parse_args()
 
     if args.command == "load-and-sync":
-        load_and_sync()
+        load_and_sync(year=args.year)
     elif args.command == "load-local":
-        load_local()
+        load_local(year=args.year)
     elif args.command == "sync-to-neon":
         sync_to_neon()
     elif args.command == "verify":
