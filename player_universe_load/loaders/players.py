@@ -5,7 +5,7 @@ from typing import Any
 from ..db import bulk_insert, json_serialize
 
 
-def load_players(conn, data: list[dict[str, Any]], season_id: int = 2025) -> dict[str, int]:
+def load_players(conn, data: list[dict[str, Any]], season_id: int) -> dict[str, int]:
     """Load players, their stats, projections, and valuations."""
     print(f"   📊 Processing {len(data):,} players...", flush=True)
     counts = {"players": 0, "batting": 0, "pitching": 0, "projections": 0, "valuations": 0}
