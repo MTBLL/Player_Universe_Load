@@ -5,7 +5,11 @@ import os
 import subprocess
 import sys
 
+from dotenv import load_dotenv
+
 from .__main__ import load_all
+
+load_dotenv()
 
 
 def load_local(year: int | None = None):
@@ -23,14 +27,14 @@ def sync_to_neon():
     """Export local database and upload to Neon."""
     print("\n📦 Exporting local database and uploading to Neon...\n")
 
-    # Get Neon DATABASE_URL
-    try:
-        from .secrets import DATABASE_URL as NEON_URL
-    except ImportError:
-        print(
-            "❌ Error: Could not load DATABASE_URL from player_universe_load/secrets.py"
-        )
-        print("   Please create secrets.py with your Neon DATABASE_URL")
+    # Read Neon DATABASE_URL directly from .env so a prior local-override
+    # in os.environ (set by load_local) doesn't shadow it.
+    from dotenv import dotenv_values
+
+    NEON_URL = dotenv_values().get("DATABASE_URL")
+    if not NEON_URL:
+        print("❌ Error: DATABASE_URL not found in .env")
+        print("   Please add DATABASE_URL=... to .env at the project root")
         sys.exit(1)
 
     # Temporary dump file

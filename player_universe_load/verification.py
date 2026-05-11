@@ -146,13 +146,16 @@ def verify_database():
     print("🏠 Checking LOCAL database first...")
     local_ok = _verify_single_database("Local PostgreSQL", "postgresql://localhost/fantasy_baseball")
 
-    # Check remote database
+    # Check remote database — read the Neon URL from .env directly so the
+    # local override set above doesn't shadow it.
     print("\n\n☁️  Checking NEON database...")
-    try:
-        from .secrets import DATABASE_URL as NEON_URL
+    from dotenv import dotenv_values
+
+    NEON_URL = dotenv_values().get("DATABASE_URL")
+    if NEON_URL:
         neon_ok = _verify_single_database("Neon PostgreSQL", NEON_URL)
-    except ImportError:
-        print("\n⚠️  Skipping Neon verification: No DATABASE_URL in player_universe_load/secrets.py")
+    else:
+        print("\n⚠️  Skipping Neon verification: No DATABASE_URL in .env")
         neon_ok = None
 
     # Summary

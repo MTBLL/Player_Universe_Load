@@ -7,28 +7,21 @@ from pathlib import Path
 from typing import Any
 
 import psycopg2
+from dotenv import load_dotenv
 
-# Allow environment variable to override secrets.py
-if "DATABASE_URL" in os.environ:
-    DATABASE_URL = os.environ["DATABASE_URL"]
-else:
-    try:
-        from .secrets import DATABASE_URL
-    except ImportError:
-        raise ImportError(
-            "DATABASE_URL not found in player_universe_load/secrets.py or environment"
-        )
+# Load .env from project root so DATABASE_URL is available in os.environ
+load_dotenv()
 
 
 def get_connection():
     """Get database connection."""
     print("🔌 Connecting to database...")
 
-    # Always check environment variable first to allow runtime overrides
-    db_url = os.environ.get('DATABASE_URL')
+    db_url = os.environ.get("DATABASE_URL")
     if not db_url:
-        # Fall back to module-level DATABASE_URL (from secrets.py)
-        db_url = DATABASE_URL
+        raise RuntimeError(
+            "DATABASE_URL not found. Set it in .env at the project root."
+        )
 
     try:
         conn = psycopg2.connect(db_url)

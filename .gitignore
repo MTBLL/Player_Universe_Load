@@ -3,7 +3,7 @@
 **__pycache__**
 .ropeproject/
 .venv/
-
+.env
 # Sensitive configuration files
 player_universe_load/secrets.py
 
