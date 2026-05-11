@@ -11,15 +11,20 @@ from .__main__ import load_all
 
 load_dotenv()
 
+DEFAULT_LOCAL_URL = "postgresql://localhost/fantasy_baseball"
+
+
+def _local_url() -> str:
+    return os.environ.get("LOCAL_DATABASE_URL", DEFAULT_LOCAL_URL)
+
 
 def load_local(year: int | None = None):
     """Load data to local PostgreSQL database."""
+    local_url = _local_url()
     print("🏠 Loading to LOCAL PostgreSQL database...")
-    print("   Connection: postgresql://localhost/fantasy_baseball\n")
+    print(f"   Connection: {local_url}\n")
 
-    # Override to use local database
-    os.environ["DATABASE_URL"] = "postgresql://localhost/fantasy_baseball"
-
+    os.environ["DATABASE_URL"] = local_url
     load_all(year=year)
 
 
@@ -27,26 +32,26 @@ def sync_to_neon():
     """Export local database and upload to Neon."""
     print("\n📦 Exporting local database and uploading to Neon...\n")
 
-    # Read Neon DATABASE_URL directly from .env so a prior local-override
-    # in os.environ (set by load_local) doesn't shadow it.
-    from dotenv import dotenv_values
-
-    NEON_URL = dotenv_values().get("DATABASE_URL")
+    NEON_URL = os.environ.get("NEON_DATABASE_URL")
     if not NEON_URL:
-        print("❌ Error: DATABASE_URL not found in .env")
-        print("   Please add DATABASE_URL=... to .env at the project root")
+        print("❌ Error: NEON_DATABASE_URL not found in environment or .env")
+        print("   Please add NEON_DATABASE_URL=... to .env at the project root")
         sys.exit(1)
+
+    local_url = _local_url()
 
     # Temporary dump file
     dump_file = "/tmp/fantasy_baseball_dump.sql"
 
     print("🔄 Step 1: Exporting local database...")
-    print("   Source: postgresql://localhost/fantasy_baseball")
+    print(f"   Source: {local_url}")
     print(f"   Output: {dump_file}\n")
 
-    # Export local database using pg_dump
+    # pg_dump accepts a connection URI as its positional dbname argument,
+    # which lets this work against both a local socket and a containerized
+    # postgres reachable via host:port.
     pg_dump_result = subprocess.run(
-        ["pg_dump", "--clean", "--if-exists", "fantasy_baseball"],
+        ["pg_dump", "--clean", "--if-exists", local_url],
         stdout=open(dump_file, "w"),
         stderr=subprocess.PIPE,
         text=True,

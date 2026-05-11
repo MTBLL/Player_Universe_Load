@@ -142,20 +142,20 @@ def verify_database():
     """Verify both local and remote databases."""
     print("\n🔍 Database Verification Tool\n")
 
-    # Check local database first
+    local_url = os.environ.get(
+        "LOCAL_DATABASE_URL", "postgresql://localhost/fantasy_baseball"
+    )
     print("🏠 Checking LOCAL database first...")
-    local_ok = _verify_single_database("Local PostgreSQL", "postgresql://localhost/fantasy_baseball")
+    local_ok = _verify_single_database("Local PostgreSQL", local_url)
 
-    # Check remote database — read the Neon URL from .env directly so the
-    # local override set above doesn't shadow it.
+    # NEON_DATABASE_URL is a stable config value — never overwritten by the
+    # local-target switch above, so a plain os.environ lookup is enough.
     print("\n\n☁️  Checking NEON database...")
-    from dotenv import dotenv_values
-
-    NEON_URL = dotenv_values().get("DATABASE_URL")
+    NEON_URL = os.environ.get("NEON_DATABASE_URL")
     if NEON_URL:
         neon_ok = _verify_single_database("Neon PostgreSQL", NEON_URL)
     else:
-        print("\n⚠️  Skipping Neon verification: No DATABASE_URL in .env")
+        print("\n⚠️  Skipping Neon verification: No NEON_DATABASE_URL in environment")
         neon_ok = None
 
     # Summary
