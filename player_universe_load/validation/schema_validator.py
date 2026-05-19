@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from ..db import validate_schema
+from ..loaders.players import BATTING_DB_COLUMNS, PITCHING_DB_COLUMNS
 
 # Define expected columns for each table based on loader code
 PLAYER_COLUMNS = [
@@ -37,136 +38,9 @@ PLAYER_COLUMNS = [
     "jersey",
 ]
 
-BATTING_STAT_COLUMNS = [
-    "player_id",
-    "season_id",
-    "stat_period",
-    "G",
-    "AB",
-    "PA",
-    "H",
-    "singles",
-    "doubles",
-    "triples",
-    "HR",
-    "XBH",
-    "TB",
-    "R",
-    "RBI",
-    "SB",
-    "CS",
-    "SBN",
-    "BB",
-    "IBB",
-    "HBP",
-    "SF",
-    "SAC",
-    "SO",
-    "GDP",
-    "AVG",
-    "OBP",
-    "SLG",
-    "OPS",
-    "BABIP",
-    "ISO",
-    "wOBA",
-    "exit_velo",
-    "adj_exit_velo",
-    "launch_angle",
-    "attack_angle",
-    "attack_dir",
-    "bat_speed",
-    "swing_length",
-    "swing_path_tilt",
-    "swing_miss_pct",
-    "swings",
-    "takes",
-    "whiffs",
-    "barrel_rate",
-    "barrels_per_bbe_pct",
-    "barrels_per_pa_pct",
-    "barrels_total",
-    "hard_hit_rate",
-    "hardhit_pct",
-    "batter_run_value_per_100",
-    "xAVG",
-    "xOBP",
-    "xSLG",
-    "xwOBA",
-    "xAVGdiff",
-    "xOBPdiff",
-    "xSLGdiff",
-    "BB_pct",
-    "K_pct",
-    "BBdist",
-    "Kdist",
-]
-
-PITCHING_STAT_COLUMNS = [
-    "player_id",
-    "season_id",
-    "stat_period",
-    "GP",
-    "GS",
-    "OUTS",
-    "IP",
-    "TBF",
-    "H",
-    "R",
-    "ER",
-    "HR",
-    "BB",
-    "IBB",
-    "K",
-    "HBP",
-    "WP",
-    "BK",
-    "W",
-    "L",
-    "WPCT",
-    "QS",
-    "SV",
-    "HLD",
-    "SVHD",
-    "SVO",
-    "BLSV",
-    "SV_pct",
-    "ERA",
-    "WHIP",
-    "OBA",
-    "OOBP",
-    "k_bb_ratio",
-    "k_per_9",
-    "bb_per_9",
-    "velo",
-    "spin_rate",
-    "eff_min_vel",
-    "percieved_velo",
-    "release_extension",
-    "release_pos_x",
-    "release_pos_z",
-    "break_z",
-    "induced_break_z",
-    "break_x_arm_side",
-    "break_x_batter_in",
-    "arm_angle",
-    "pitcher_run_exp",
-    "pitcher_run_value_per_100",
-    "exit_velo",
-    "adj_exit_velo",
-    "launch_angle",
-    "swing_miss_pct",
-    "swings",
-    "takes",
-    "whiffs",
-    "xAVG",
-    "xOBP",
-    "xSLG",
-    "xwOBA",
-    "xAVGdiff",
-    "xOBPdiff",
-    "xSLGdiff",
-]
+# Sourced from the spec in loaders/players.py to avoid drift.
+BATTING_STAT_COLUMNS = ["player_id", "season_id", "stat_period"] + list(BATTING_DB_COLUMNS)
+PITCHING_STAT_COLUMNS = ["player_id", "season_id", "stat_period"] + list(PITCHING_DB_COLUMNS)
 
 
 def validate_data_schema(conn, fixtures_dir: Path) -> bool:
@@ -191,21 +65,19 @@ def validate_data_schema(conn, fixtures_dir: Path) -> bool:
             if not is_valid:
                 schema_issues.append(("players", missing, extra))
 
-            # Validate batting stats if present
-            if "stats" in sample and sample["stats"]:
-                if (
-                    "current_season" in sample["stats"]
-                    and sample["stats"]["current_season"]
-                ):
-                    cs = sample["stats"]["current_season"]
-                    if "AB" in cs or "AVG" in cs:
-                        is_valid, missing, extra = validate_schema(
-                            conn, "player_stats_batting", BATTING_STAT_COLUMNS
-                        )
-                        if not is_valid:
-                            schema_issues.append(
-                                ("player_stats_batting", missing, extra)
-                            )
+            # Validate batting stats if present (new nested shape: stats.espn.current_season)
+            espn_cs = (
+                (sample.get("stats") or {}).get("espn", {}).get("current_season")
+                or {}
+            )
+            if "AB" in espn_cs or "AVG" in espn_cs:
+                is_valid, missing, extra = validate_schema(
+                    conn, "player_stats_batting", BATTING_STAT_COLUMNS
+                )
+                if not is_valid:
+                    schema_issues.append(
+                        ("player_stats_batting", missing, extra)
+                    )
 
     # Check pitchers file
     pitchers_file = fixtures_dir / "pitchers.json"
@@ -215,21 +87,19 @@ def validate_data_schema(conn, fixtures_dir: Path) -> bool:
         if data and len(data) > 0:
             sample = data[0]
 
-            # Validate pitching stats if present
-            if "stats" in sample and sample["stats"]:
-                if (
-                    "current_season" in sample["stats"]
-                    and sample["stats"]["current_season"]
-                ):
-                    cs = sample["stats"]["current_season"]
-                    if "IP" in cs or "ERA" in cs:
-                        is_valid, missing, extra = validate_schema(
-                            conn, "player_stats_pitching", PITCHING_STAT_COLUMNS
-                        )
-                        if not is_valid:
-                            schema_issues.append(
-                                ("player_stats_pitching", missing, extra)
-                            )
+            # Validate pitching stats if present (new nested shape: stats.espn.current_season)
+            espn_cs = (
+                (sample.get("stats") or {}).get("espn", {}).get("current_season")
+                or {}
+            )
+            if "IP" in espn_cs or "ERA" in espn_cs:
+                is_valid, missing, extra = validate_schema(
+                    conn, "player_stats_pitching", PITCHING_STAT_COLUMNS
+                )
+                if not is_valid:
+                    schema_issues.append(
+                        ("player_stats_pitching", missing, extra)
+                    )
 
     # Report issues
     if schema_issues:

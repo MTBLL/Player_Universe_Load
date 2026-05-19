@@ -25,6 +25,18 @@ CREATE TABLE player_stats_pitching (
     swing_miss_pct NUMERIC, swings INTEGER, takes INTEGER, whiffs INTEGER,
     "xAVG" NUMERIC, "xOBP" NUMERIC, "xSLG" NUMERIC, "xwOBA" NUMERIC,
     "xAVGdiff" NUMERIC, "xOBPdiff" NUMERIC, "xSLGdiff" NUMERIC,
+    -- Savant-against fields: rates the pitcher allowed batters
+    "AVG" NUMERIC, "OBP" NUMERIC, "SLG" NUMERIC,
+    "BABIP" NUMERIC, "ISO" NUMERIC,
+    "BB_pct" NUMERIC, "K_pct" NUMERIC, "BBdist" NUMERIC,
+    "BIP" NUMERIC, "PA" NUMERIC,
+    pitches NUMERIC, total_pitches NUMERIC, pitch_percent NUMERIC,
+    barrels_per_bbe_pct NUMERIC, barrels_per_bbe_pct_pct_rnk NUMERIC,
+    barrels_per_pa_pct NUMERIC, barrels_per_pa_pct_pct_rnk NUMERIC,
+    barrels_total NUMERIC, barrels_total_pct_rnk NUMERIC,
+    hardhit_pct NUMERIC, hardhit_pct_pct_rnk NUMERIC,
+    rate_ideal_attack_angle NUMERIC, run_exp NUMERIC,
+    "wOBA" NUMERIC, "wOBAdiff" NUMERIC,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(player_id, season_id, stat_period)
