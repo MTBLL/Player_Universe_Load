@@ -93,9 +93,9 @@ def test_export_table_empty_table_preserves_types(tmp_path: Path):
     """P2: empty parquet must preserve real Arrow types, not collapse to null.
 
     Builds a temp table with several Postgres types, exports it empty, then
-    asserts that the read-back parquet schema carries int/float/string/bool/
-    timestamp — not pyarrow null. Downstream analytics breaks when types
-    flicker between runs depending on whether the table happened to be empty.
+    asserts the read-back parquet schema carries int/decimal/string/bool/
+    timestamp — not pyarrow null. NUMERIC maps to decimal128(18, 3) for
+    lossless storage of stat values at thousandths precision.
     """
     import pyarrow as pa
     import pyarrow.parquet as pq
@@ -120,11 +120,43 @@ def test_export_table_empty_table_preserves_types(tmp_path: Path):
         schema = {f.name: f.type for f in t.schema}
         assert schema["id"] == pa.int32()
         assert schema["name"] == pa.string()
-        assert schema["rate"] == pa.float64()
+        assert schema["rate"] == pa.decimal128(18, 3)
         assert schema["is_active"] == pa.bool_()
         assert schema["payload"] == pa.string()  # JSONB encoded as string
-        # Timestamps round-trip as us precision
         assert pa.types.is_timestamp(schema["created_at"])
+    finally:
+        conn.close()
+
+
+def test_export_table_numeric_quantized_and_typed(tmp_path: Path):
+    """Round-trip a non-empty NUMERIC column. Verify decimal128(18, 3) +
+    ROUND_HALF_UP applied to values that would otherwise lose precision.
+    """
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    conn = db.get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("CREATE TEMP TABLE _numeric_probe (id INTEGER, era NUMERIC)")
+            # Use values that exercise ROUND_HALF_UP behavior
+            cur.execute(
+                "INSERT INTO _numeric_probe VALUES "
+                "(1, 4.5675), "  # half-up -> 4.568
+                "(2, 4.5674), "  # half-down -> 4.567
+                "(3, 0.27815), "  # half-up tail -> 0.278
+                "(4, NULL)"
+            )
+            conn.commit()
+        path = parquet_mod.export_table(conn, "_numeric_probe", target_dir=tmp_path)
+        t = pq.read_table(path)
+        assert t.schema.field("era").type == pa.decimal128(18, 3)
+        # to_pylist returns Decimal at the declared scale
+        eras = t.column("era").to_pylist()
+        assert eras[0] == Decimal("4.568")
+        assert eras[1] == Decimal("4.567")
+        assert eras[2] == Decimal("0.278")
+        assert eras[3] is None
     finally:
         conn.close()
 
@@ -154,18 +186,31 @@ def test_export_all_propagates_error(tmp_path: Path):
         conn.close()
 
 
-def test_sanitize_decimals_handles_infinity():
+def test_sanitize_decimals_handles_infinity_and_quantizes_finite():
+    """Non-finite -> None. Finite -> quantize to thousandths, ROUND_HALF_UP."""
     rows = [
         {"era": Decimal("4.50"), "whip": Decimal("Infinity")},
         {"era": Decimal("-Infinity"), "whip": Decimal("NaN")},
         {"era": None, "whip": Decimal("1.20")},
+        # Truncation + rounding behavior
+        {"era": Decimal("4.5675"), "whip": Decimal("4.5674")},  # half-up: .5675->.568, .5674->.567
+        {"era": Decimal("0.2785"), "whip": Decimal("0.2775")},  # half-up: .2785->.279, .2775->.278
+        {"era": Decimal("-4.5675"), "whip": Decimal("-0.0005")},  # negative half-up: -.5675->-.568
     ]
     parquet_mod._sanitize_decimals(rows)
-    assert rows[0]["era"] == Decimal("4.50")
+    # Non-finite sanitized
+    assert rows[0]["era"] == Decimal("4.500")  # quantized to scale 3
     assert rows[0]["whip"] is None
     assert rows[1]["era"] is None
     assert rows[1]["whip"] is None
-    assert rows[2]["whip"] == Decimal("1.20")
+    assert rows[2]["whip"] == Decimal("1.200")
+    # Half-up rounding (not banker's)
+    assert rows[3]["era"] == Decimal("4.568")
+    assert rows[3]["whip"] == Decimal("4.567")
+    assert rows[4]["era"] == Decimal("0.279")
+    assert rows[4]["whip"] == Decimal("0.278")
+    assert rows[5]["era"] == Decimal("-4.568")
+    assert rows[5]["whip"] == Decimal("-0.001")  # half-up on negative: -0.0005 -> -0.001
 
 
 def test_stringify_jsonb_skips_already_string():

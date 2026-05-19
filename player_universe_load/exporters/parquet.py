@@ -9,12 +9,19 @@ from __future__ import annotations
 
 import json
 import logging
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 from psycopg2.extras import RealDictCursor
+
+# All NUMERIC values are stored as decimal128(18, 3): 15 integer digits + 3
+# fractional digits, lossless within that range. Quantize with ROUND_HALF_UP
+# so .5 rounds up (regulatory accounting convention), not banker's rounding.
+_NUMERIC_PRECISION = 18
+_NUMERIC_SCALE = 3
+_QUANTUM = Decimal("0.001")
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +71,7 @@ _PG_TO_ARROW = {
     "bigserial": pa.int64(),
     "real": pa.float32(),
     "double precision": pa.float64(),
-    "numeric": pa.float64(),
+    "numeric": pa.decimal128(_NUMERIC_PRECISION, _NUMERIC_SCALE),
     "boolean": pa.bool_(),
     "text": pa.string(),
     "character varying": pa.string(),
@@ -91,30 +98,24 @@ def _arrow_schema_for(conn, table: str) -> pa.Schema:
     return pa.schema(fields)
 
 
-def _empty_arrow_table(conn, table: str) -> pa.Table:
-    """Build a typed zero-row Arrow table from information_schema.
-
-    Uses an explicit pyarrow Schema so the empty parquet retains real column
-    types. The earlier sample-row-then-slice approach inferred ``null`` types
-    for every column, which broke downstream readers that expect a stable
-    numeric/string schema across runs.
-    """
-    schema = _arrow_schema_for(conn, table)
-    return pa.Table.from_pylist([], schema=schema)
-
-
 def _sanitize_decimals(rows: list[dict]) -> list[dict]:
-    """Replace Decimal('Infinity')/('-Infinity')/('NaN') with None.
+    """Normalize Decimal values for parquet emission.
 
-    Postgres NUMERIC permits Infinity/NaN (e.g. ERA/WHIP for a pitcher with
-    0 IP). psycopg2 returns these as Decimal('Infinity'), which pyarrow
-    rejects when inferring numeric arrays. None is the analytics-correct
-    representation — division by zero isn't a real ERA.
+    - Decimal('Infinity'/'-Infinity'/'NaN') (legal in Postgres NUMERIC,
+      e.g. ERA for a pitcher with 0 IP) -> None. pyarrow rejects non-finite
+      Decimals and division-by-zero isn't an analytics-correct value.
+    - Finite Decimal values quantized to thousandths with ROUND_HALF_UP so
+      they fit decimal128(18, 3) exactly. .5 rounds up (regulatory
+      convention), not Python's default banker's rounding.
     """
     for r in rows:
         for k, v in list(r.items()):
-            if isinstance(v, Decimal) and not v.is_finite():
+            if not isinstance(v, Decimal):
+                continue
+            if not v.is_finite():
                 r[k] = None
+            else:
+                r[k] = v.quantize(_QUANTUM, rounding=ROUND_HALF_UP)
     return rows
 
 
@@ -154,6 +155,7 @@ def export_table(conn, table: str, target_dir: Path = PARQUET_DIR) -> Path:
 
     cols = _table_columns(conn, table)
     jsonb_cols = [name for name, dtype in cols if dtype == "jsonb"]
+    schema = _arrow_schema_for(conn, table)
 
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(f"SELECT * FROM {table}")
@@ -161,14 +163,16 @@ def export_table(conn, table: str, target_dir: Path = PARQUET_DIR) -> Path:
 
     if not rows:
         logger.warning("Table %s is empty; writing zero-row parquet", table)
-        arrow_table = _empty_arrow_table(conn, table)
     else:
-        # JSONB columns are JSON-encoded as strings; pyarrow type-inference
-        # fails on heterogeneous nested shapes. Other column types come back
-        # from psycopg2 as native Python types pyarrow infers cleanly.
+        # JSONB columns are JSON-encoded as strings (pyarrow type-inference
+        # rejects heterogeneous nested shapes). NUMERIC values quantized to
+        # thousandths so they fit decimal128(18, 3) exactly. Other column
+        # types come back from psycopg2 as native Python types that match
+        # the declared schema directly.
         rows = _sanitize_decimals(rows)
         rows = _stringify_jsonb(rows, jsonb_cols)
-        arrow_table = pa.Table.from_pylist(rows)
+
+    arrow_table = pa.Table.from_pylist(rows, schema=schema)
 
     pq.write_table(arrow_table, tmp, compression="zstd")
     tmp.rename(final)
