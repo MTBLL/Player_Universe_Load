@@ -22,7 +22,16 @@ from typing import Any
 
 import boto3
 from botocore.config import Config
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+)
 
+from ..db import console
 from .parquet import EXPORTED_TABLES, PARQUET_DIR
 
 logger = logging.getLogger(__name__)
@@ -300,9 +309,27 @@ def verify_all(
         tables = [r[0] for r in cur.fetchall()]
 
     results: list[dict[str, Any]] = []
-    for t in tables:
-        results.append(verify_table(conn, t, cfg, s3=s3))
+    with _progress("🔍 Verifying R2 objects") as progress:
+        task = progress.add_task("verify", total=len(tables), current="")
+        for t in tables:
+            progress.update(task, current=t)
+            results.append(verify_table(conn, t, cfg, s3=s3))
+            progress.update(task, advance=1)
     return results
+
+
+def _progress(title: str) -> Progress:
+    """Per-table progress bar config shared by upload_all + verify_all."""
+    return Progress(
+        SpinnerColumn(),
+        TextColumn(f"[bold]{title}"),
+        BarColumn(bar_width=30),
+        MofNCompleteColumn(),
+        TextColumn("[dim]{task.fields[current]}"),
+        TimeElapsedColumn(),
+        console=console,
+        transient=True,
+    )
 
 
 def upload_all(
@@ -315,19 +342,30 @@ def upload_all(
     """Upload every table in EXPORTED_TABLES; return per-table result dicts.
 
     Reuses a single boto3 S3 client across uploads so the TLS connection
-    and signing context aren't rebuilt 12 times.
+    and signing context aren't rebuilt 13 times.
     """
     cfg = cfg or R2Config.from_env()
     s3 = _s3_client(cfg)
     results: list[dict[str, Any]] = []
-    for table in EXPORTED_TABLES:
-        try:
-            results.append(
-                upload_table(
-                    conn, table, cfg, s3=s3, source_dir=source_dir, key_prefix=key_prefix
+    with _progress("☁️  Uploading to R2") as progress:
+        task = progress.add_task(
+            "upload", total=len(EXPORTED_TABLES), current=""
+        )
+        for table in EXPORTED_TABLES:
+            progress.update(task, current=table)
+            try:
+                results.append(
+                    upload_table(
+                        conn,
+                        table,
+                        cfg,
+                        s3=s3,
+                        source_dir=source_dir,
+                        key_prefix=key_prefix,
+                    )
                 )
-            )
-        except Exception as e:
-            logger.error("Failed to upload %s: %s", table, e)
-            raise
+            except Exception as e:
+                logger.error("Failed to upload %s: %s", table, e)
+                raise
+            progress.update(task, advance=1)
     return results

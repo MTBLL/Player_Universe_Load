@@ -15,6 +15,16 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
 from psycopg2.extras import RealDictCursor
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+)
+
+from ..db import console
 
 # All NUMERIC values are stored as decimal128(18, 3): 15 integer digits + 3
 # fractional digits, lossless within that range. Quantize with ROUND_HALF_UP
@@ -186,10 +196,23 @@ def export_table(conn, table: str, target_dir: Path = PARQUET_DIR) -> Path:
 def export_all(conn, target_dir: Path = PARQUET_DIR) -> list[Path]:
     """Export every table in EXPORTED_TABLES; return list of written paths."""
     paths: list[Path] = []
-    for table in EXPORTED_TABLES:
-        try:
-            paths.append(export_table(conn, table, target_dir=target_dir))
-        except Exception as e:
-            logger.error("Failed to export %s: %s", table, e)
-            raise
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold]📦 Exporting to parquet"),
+        BarColumn(bar_width=30),
+        MofNCompleteColumn(),
+        TextColumn("[dim]{task.fields[current]}"),
+        TimeElapsedColumn(),
+        console=console,
+        transient=True,
+    ) as progress:
+        task = progress.add_task("export", total=len(EXPORTED_TABLES), current="")
+        for table in EXPORTED_TABLES:
+            progress.update(task, current=table)
+            try:
+                paths.append(export_table(conn, table, target_dir=target_dir))
+            except Exception as e:
+                logger.error("Failed to export %s: %s", table, e)
+                raise
+            progress.update(task, advance=1)
     return paths
