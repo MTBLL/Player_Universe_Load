@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 
 from .__main__ import load_all
 from .db import get_connection
-from .exporters import PARQUET_DIR, export_all
+from .exporters import PARQUET_DIR, export_all, upload_all
 
 load_dotenv()
 
@@ -108,9 +108,30 @@ def export_parquets():
     print(f"\n✅ Exported {len(paths)} parquet files to {PARQUET_DIR}")
 
 
+def upload_parquets():
+    """Upload local parquet files to R2 and record metadata in Postgres."""
+    print("☁️  Uploading parquet files to R2...")
+    print(f"   Source dir: {PARQUET_DIR}\n")
+
+    os.environ["DATABASE_URL"] = _local_url()
+    conn = get_connection()
+    try:
+        results = upload_all(conn)
+    finally:
+        conn.close()
+
+    total_bytes = sum(r["size_bytes"] for r in results)
+    print(
+        f"\n✅ Uploaded {len(results)} parquet files "
+        f"({total_bytes / 1024 / 1024:.1f}MB) to R2"
+    )
+
+
 def load_and_sync(year: int | None = None):
-    """Load to local database, export parquets, then sync to Neon."""
-    print("🚀 Full workflow: Load local → Export parquets → Upload to Neon\n")
+    """Load local -> export parquets -> upload parquets to R2 -> sync to Neon."""
+    print(
+        "🚀 Full workflow: Load local → Export parquets → Upload to R2 → Upload to Neon\n"
+    )
     print("=" * 60)
 
     # Step 1: Load locally
@@ -118,16 +139,25 @@ def load_and_sync(year: int | None = None):
 
     print("\n" + "=" * 60)
 
-    # Step 2: Export parquets (analytics artifact)
+    # Step 2: Export parquets (local files)
     export_parquets()
 
     print("\n" + "=" * 60)
 
-    # Step 3: Sync to Neon
+    # Step 3: Upload parquets to R2 (records metadata in local Postgres
+    # *before* the dump, so the parquet_artifacts table travels to Neon).
+    upload_parquets()
+
+    print("\n" + "=" * 60)
+
+    # Step 4: Sync local Postgres to Neon (carries parquet_artifacts metadata)
     sync_to_neon()
 
     print("\n" + "=" * 60)
-    print("\n✅ Complete! Data loaded locally, exported to parquet, synced to Neon.")
+    print(
+        "\n✅ Complete! Data loaded locally, parquets exported + uploaded to R2, "
+        "synced to Neon."
+    )
 
 
 def verify():
@@ -158,6 +188,9 @@ Examples:
   # Just export parquets from current local DB
   uv run player-universe-load export-parquets
 
+  # Just upload existing parquets to R2 + record metadata
+  uv run player-universe-load upload-parquets
+
   # Verify database
   uv run player-universe-load verify
         """,
@@ -165,7 +198,14 @@ Examples:
 
     parser.add_argument(
         "command",
-        choices=["load-and-sync", "load-local", "sync-to-neon", "export-parquets", "verify"],
+        choices=[
+            "load-and-sync",
+            "load-local",
+            "sync-to-neon",
+            "export-parquets",
+            "upload-parquets",
+            "verify",
+        ],
         help="Command to execute",
     )
     parser.add_argument(
@@ -185,6 +225,8 @@ Examples:
         sync_to_neon()
     elif args.command == "export-parquets":
         export_parquets()
+    elif args.command == "upload-parquets":
+        upload_parquets()
     elif args.command == "verify":
         verify()
 

@@ -8,17 +8,23 @@
 # 1. Load to local PostgreSQL (30 seconds)
 uv run player-universe-load load-local
 
-# 2. Export columnar parquet artifacts for analytics (a few seconds)
+# 2. Export columnar parquet artifacts for analytics (~3 seconds)
 uv run player-universe-load export-parquets
 
-# 3. Export and upload to Neon (2-3 minutes)
+# 3. Upload parquets to Cloudflare R2 + record metadata (~10 seconds)
+uv run player-universe-load upload-parquets
+
+# 4. Export and upload to Neon (2-3 minutes)
 uv run player-universe-load sync-to-neon
 ```
 
 **Total time: ~3 minutes** (vs 60+ minutes for direct remote loading!)
 
-The `load-and-sync` command runs all three steps in order. Three output
-targets in one invocation: local Postgres → parquet files → Neon.
+The `load-and-sync` command runs all four steps in order. Four output
+targets in one invocation: local Postgres → parquet files → R2 → Neon.
+The `parquet_artifacts` table in Postgres tracks the R2 objects (object_key,
+sha256, size, row_count) so the viz app can query Hasura for current
+artifact pointers and fetch from R2 directly.
 
 See **[QUICK_START.md](QUICK_START.md)** for detailed instructions.
 
@@ -130,7 +136,38 @@ Example query with DuckDB:
 duckdb -c "SELECT COUNT(*) FROM read_parquet('/Users/Shared/BaseballHQ/resources/analytics/players.parquet')"
 ```
 
-#### 4. `sync-to-neon`
+#### 4. `upload-parquets`
+Uploads the local parquet files to Cloudflare R2 (or any S3-compatible
+object store) and records metadata in the `parquet_artifacts` table.
+
+```bash
+uv run player-universe-load upload-parquets
+```
+
+**What it does:**
+- Reads each `.parquet` file from `/Users/Shared/BaseballHQ/resources/analytics/`
+- Computes sha256 by streaming the file (bounded peak memory)
+- PUTs to R2 with `ContentType: application/vnd.apache.parquet`
+- UPSERTs `parquet_artifacts` row keyed on `table_name` (one row per table,
+  always reflects the latest upload)
+- Records: `object_key`, `bucket`, `endpoint`, `sha256`, `etag`, `size_bytes`,
+  `row_count`, `uploaded_at`
+- **Completes in ~10 seconds** for the full 12-table set
+
+**Required env vars** (in `.env`):
+```bash
+R2_ACCOUNT_ID=...
+R2_ACCESS_KEY_ID=...
+R2_SECRET_ACCESS_KEY=...
+R2_BUCKET=...
+R2_ENDPOINT=https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com
+```
+
+S3 PUT is atomic per object — readers always see either the previous
+version or the new one, never a partial. Verification via sha256
+comparison is the recommended pattern downstream.
+
+#### 5. `sync-to-neon`
 Exports local database and uploads to Neon.
 
 ```bash
@@ -147,7 +184,7 @@ uv run player-universe-load sync-to-neon
 
 ### Utility Commands
 
-#### 5. `verify`
+#### 6. `verify`
 Verify database structure and query capabilities.
 
 ```bash

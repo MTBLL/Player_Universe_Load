@@ -6,10 +6,11 @@ This project loads fantasy baseball data (players, teams, leagues, stats, projec
 
 ## Overview
 
-The system transforms fixture data from JSON files and emits **three** output artifacts:
+The system transforms fixture data from JSON files and emits **four** output artifacts:
 1. Load to **local PostgreSQL** (30 seconds) — fast queries during pipeline runs
 2. Export **parquet files** to `/Users/Shared/BaseballHQ/resources/analytics/` (~3 seconds) — columnar artifact for downstream viz/notebook consumption via DuckDB / Polars / Pandas / Arrow
-3. Export and upload to **Neon** via `pg_dump` (2-3 minutes) — durable remote copy, queryable via Hasura GraphQL
+3. Upload parquets to **Cloudflare R2** (~10 seconds) — durable object storage with zero egress; metadata (object_key + sha256 + row_count) recorded in `parquet_artifacts` table
+4. Export and upload to **Neon** via `pg_dump` (2-3 minutes) — durable remote copy, queryable via Hasura GraphQL. The `parquet_artifacts` rows travel with the dump so Neon/Hasura clients see current R2 pointers.
 
 **Total time: ~3 minutes** (vs 60+ minutes for direct remote loading!)
 
