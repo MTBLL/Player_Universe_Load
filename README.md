@@ -1,3 +1,5 @@
+[![codecov](https://codecov.io/gh/MTBLL/Player_Universe_Load/graph/badge.svg?token=FQid9UjEFi)](https://codecov.io/gh/MTBLL/Player_Universe_Load)
+
 # Player Universe Load
 
 This project loads fantasy baseball data (players, teams, leagues, stats, projections, valuations) into PostgreSQL using a **local-first approach** for fast, efficient database population.

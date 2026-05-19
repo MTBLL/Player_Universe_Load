@@ -1,0 +1,35 @@
+name: Neon Smoke Test
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Daily at 12:00 UTC (7am ET / 4am PT) — after typical nightly load
+    - cron: '0 12 * * *'
+
+concurrency:
+  group: neon-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+
+    env:
+      NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run Neon smoke test
+        run: uv run python scripts/neon_smoke.py
