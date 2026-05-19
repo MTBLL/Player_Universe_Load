@@ -89,20 +89,57 @@ def test_table_columns_raises_on_unknown_table():
         conn.close()
 
 
-def test_export_table_empty_table(tmp_path: Path):
-    """Empty-table branch writes a zero-row parquet via _empty_arrow_table."""
+def test_export_table_empty_table_preserves_types(tmp_path: Path):
+    """P2: empty parquet must preserve real Arrow types, not collapse to null.
+
+    Builds a temp table with several Postgres types, exports it empty, then
+    asserts that the read-back parquet schema carries int/float/string/bool/
+    timestamp — not pyarrow null. Downstream analytics breaks when types
+    flicker between runs depending on whether the table happened to be empty.
+    """
+    import pyarrow as pa
     import pyarrow.parquet as pq
 
     conn = db.get_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("CREATE TEMP TABLE _empty_probe (id INTEGER, name TEXT)")
+            cur.execute(
+                "CREATE TEMP TABLE _typed_empty_probe ("
+                "  id INTEGER, "
+                "  name TEXT, "
+                "  rate NUMERIC, "
+                "  is_active BOOLEAN, "
+                "  payload JSONB, "
+                "  created_at TIMESTAMP"
+                ")"
+            )
             conn.commit()
-        path = parquet_mod.export_table(conn, "_empty_probe", target_dir=tmp_path)
-        assert path.exists()
+        path = parquet_mod.export_table(conn, "_typed_empty_probe", target_dir=tmp_path)
         t = pq.read_table(path)
         assert t.num_rows == 0
-        assert "id" in t.column_names and "name" in t.column_names
+        schema = {f.name: f.type for f in t.schema}
+        assert schema["id"] == pa.int32()
+        assert schema["name"] == pa.string()
+        assert schema["rate"] == pa.float64()
+        assert schema["is_active"] == pa.bool_()
+        assert schema["payload"] == pa.string()  # JSONB encoded as string
+        # Timestamps round-trip as us precision
+        assert pa.types.is_timestamp(schema["created_at"])
+    finally:
+        conn.close()
+
+
+def test_arrow_schema_unknown_pg_type_falls_back_to_string(tmp_path: Path):
+    """Unknown Postgres type maps to pa.string() — defensive fallback."""
+    import pyarrow as pa
+
+    conn = db.get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("CREATE TEMP TABLE _unknown_probe (label inet)")
+            conn.commit()
+        schema = parquet_mod._arrow_schema_for(conn, "_unknown_probe")
+        assert schema.field("label").type == pa.string()
     finally:
         conn.close()
 
@@ -335,6 +372,69 @@ def test_load_team_handles_bad_acquisition_date_and_none_slot():
 
 
 # -------------------- loaders/players.py --------------------
+
+
+def test_infer_player_type_explicit_markers():
+    from player_universe_load.loaders.players import _infer_player_type
+
+    assert _infer_player_type({"player_type": "batter"}) == "batter"
+    assert _infer_player_type({"player_type": "hitter"}) == "batter"
+    assert _infer_player_type({"player_type": "Batter"}) == "batter"
+    assert _infer_player_type({"player_type": "pitcher"}) == "pitcher"
+
+
+def test_infer_player_type_from_stat_keys():
+    from player_universe_load.loaders.players import _infer_player_type
+
+    # Marker absent — must sniff stat keys
+    batter = {"stats": {"espn": {"current_season": {"AB": 100, "AVG": 0.250}}}}
+    pitcher = {"stats": {"espn": {"current_season": {"IP": 50, "ERA": 3.0}}}}
+    assert _infer_player_type(batter) == "batter"
+    assert _infer_player_type(pitcher) == "pitcher"
+
+    # ESPN B_BB / P_BB prefixed keys
+    assert _infer_player_type({"stats": {"espn": {"current_season": {"B_BB": 30}}}}) == "batter"
+    assert _infer_player_type({"stats": {"espn": {"current_season": {"P_BB": 30}}}}) == "pitcher"
+
+    # Fangraphs projections only
+    fg_pitcher = {"stats": {"fangraphs": {"projections": {"IP": 180, "ERA": 4.0}}}}
+    assert _infer_player_type(fg_pitcher) == "pitcher"
+
+    # Savant tabular only
+    sv_batter = {"stats": {"savant": {"all": {"AVG": 0.3, "BB_pct": 10.0, "B_SO": 50}}}}
+    assert _infer_player_type(sv_batter) == "batter"
+
+    # No stats at all -> default pitcher (last resort)
+    assert _infer_player_type({}) == "pitcher"
+    assert _infer_player_type({"player_type": "unknown"}) == "pitcher"
+
+
+def test_load_players_routes_hitter_payload_without_marker():
+    """Regression P1: hitter feed without player_type marker must land in batting."""
+    from player_universe_load.loaders.players import load_players
+
+    conn = db.get_connection()
+    try:
+        data = [
+            {
+                "id_espn": 999999030,
+                "name": "Marker Absent Hitter",
+                # NO player_type field
+                "stats": {
+                    "espn": {
+                        "current_season": {
+                            "AB": 400, "H": 110, "AVG": 0.275,
+                            "HR": 20, "R": 60, "RBI": 70,
+                        }
+                    }
+                },
+            }
+        ]
+        counts = load_players(conn, data, season_id=2026)
+        assert counts["batting"] >= 1
+        assert counts["pitching"] == 0
+    finally:
+        conn.close()
 
 
 def test_load_players_handles_no_stats_no_valuations():

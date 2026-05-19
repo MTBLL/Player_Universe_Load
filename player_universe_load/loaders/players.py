@@ -33,6 +33,50 @@ SAVANT_BLOB_PERIODS = (
     "pitch_arsenal",
 )
 
+# Stat-key markers used to infer player_type when the explicit marker is
+# absent or unrecognized. Order matters: prefer ESPN/Fangraphs current_season,
+# then projections, then anything else.
+_BATTER_STAT_KEYS = frozenset(("AB", "AVG", "B_BB", "B_SO", "OBP", "SLG", "singles"))
+_PITCHER_STAT_KEYS = frozenset(("IP", "ERA", "WHIP", "K", "ER", "P_H", "P_BB", "P_HR", "P_R"))
+
+
+def _infer_player_type(player: dict) -> str:
+    """Return 'batter' or 'pitcher'.
+
+    Honor an explicit ``player_type`` of 'batter'/'hitter' or 'pitcher' when
+    present; otherwise sniff stat keys across nested stats sources/periods to
+    decide. Defaults to 'pitcher' only as a last resort when no stat evidence
+    is found in either direction.
+    """
+    explicit = (player.get("player_type") or "").lower()
+    if explicit in ("batter", "hitter"):
+        return "batter"
+    if explicit == "pitcher":
+        return "pitcher"
+
+    stats = player.get("stats") or {}
+    # Probe in priority order: espn periods, fangraphs periods, savant tabular.
+    candidates: list[dict] = []
+    for src_key, periods in (
+        ("espn", ESPN_PERIOD_LABELS.keys()),
+        ("fangraphs", FANGRAPHS_PERIOD_LABELS.keys()),
+        ("savant", SAVANT_TABULAR_LABELS.keys()),
+    ):
+        src = stats.get(src_key) or {}
+        for p in periods:
+            v = src.get(p)
+            if isinstance(v, dict) and v:
+                candidates.append(v)
+
+    for c in candidates:
+        keys = c.keys()
+        if _BATTER_STAT_KEYS & keys:
+            return "batter"
+        if _PITCHER_STAT_KEYS & keys:
+            return "pitcher"
+
+    return "pitcher"
+
 # Spec-driven row builders. Each entry is (db_column, (json_alias, ...)).
 # First non-None alias wins. Adding a new field = add a single tuple.
 BATTING_COLUMN_SPEC: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -277,7 +321,7 @@ def load_players(conn, data: list[dict[str, Any]], season_id: int) -> dict[str, 
         # Stats: stats.{espn,fangraphs,savant}.{period}
         # ESPN + Savant tabular -> batting/pitching rows. Fangraphs + Savant blobs -> projection rows (JSONB).
         stats = player.get("stats") or {}
-        player_type = "batter" if player.get("player_type") == "batter" else "pitcher"
+        player_type = _infer_player_type(player)
 
         espn = stats.get("espn") or {}
         for espn_key, period_label in ESPN_PERIOD_LABELS.items():

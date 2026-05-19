@@ -52,10 +52,55 @@ def _table_columns(conn, table: str) -> list[tuple[str, str]]:
     return [(c[0], c[1]) for c in cols]
 
 
-def _empty_arrow_table(conn, table: str) -> pa.Table:
-    """Build a typed zero-row Arrow table from information_schema."""
+# Postgres `information_schema.data_type` -> pyarrow dtype.
+# Conservative mapping: pick the widest sensible type so a future row of any
+# legal value fits. JSONB is stored as string because the writer JSON-encodes
+# JSONB columns regardless of row count.
+_PG_TO_ARROW = {
+    "smallint": pa.int16(),
+    "integer": pa.int32(),
+    "bigint": pa.int64(),
+    "serial": pa.int32(),
+    "bigserial": pa.int64(),
+    "real": pa.float32(),
+    "double precision": pa.float64(),
+    "numeric": pa.float64(),
+    "boolean": pa.bool_(),
+    "text": pa.string(),
+    "character varying": pa.string(),
+    "character": pa.string(),
+    "uuid": pa.string(),
+    "json": pa.string(),
+    "jsonb": pa.string(),
+    "date": pa.date32(),
+    "timestamp without time zone": pa.timestamp("us"),
+    "timestamp with time zone": pa.timestamp("us", tz="UTC"),
+    "time without time zone": pa.time64("us"),
+    "bytea": pa.binary(),
+    "ARRAY": pa.string(),
+}
+
+
+def _arrow_schema_for(conn, table: str) -> pa.Schema:
+    """Build a pyarrow Schema with real types sourced from information_schema."""
     cols = _table_columns(conn, table)
-    return pa.Table.from_pylist([{c[0]: None for c in cols}]).slice(0, 0)
+    fields = []
+    for name, pg_type in cols:
+        arrow_type = _PG_TO_ARROW.get(pg_type, pa.string())
+        fields.append(pa.field(name, arrow_type))
+    return pa.schema(fields)
+
+
+def _empty_arrow_table(conn, table: str) -> pa.Table:
+    """Build a typed zero-row Arrow table from information_schema.
+
+    Uses an explicit pyarrow Schema so the empty parquet retains real column
+    types. The earlier sample-row-then-slice approach inferred ``null`` types
+    for every column, which broke downstream readers that expect a stable
+    numeric/string schema across runs.
+    """
+    schema = _arrow_schema_for(conn, table)
+    return pa.Table.from_pylist([], schema=schema)
 
 
 def _sanitize_decimals(rows: list[dict]) -> list[dict]:
