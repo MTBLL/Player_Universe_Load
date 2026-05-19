@@ -1,14 +1,24 @@
 #!/usr/bin/env python3
 """CLI commands for Player Universe Load."""
 
+import functools
 import os
 import subprocess
 import sys
+import time
 
 from dotenv import load_dotenv
 
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+)
+
 from .__main__ import load_all
-from .db import get_connection
+from .db import console, get_connection
 from .exporters import PARQUET_DIR, export_all, upload_all, verify_all
 
 load_dotenv()
@@ -20,6 +30,33 @@ def _local_url() -> str:
     return os.environ.get("LOCAL_DATABASE_URL", DEFAULT_LOCAL_URL)
 
 
+def _timed(label: str):
+    """Decorator: print a persistent elapsed-time line when fn completes.
+
+    Used on every public CLI subcommand so the operator always gets a
+    final "⏱️ <label> complete in MM:SS" line — including the wrapping
+    `load-and-sync` invocation, which gives the total pipeline time even
+    though each sub-step also reports its own elapsed.
+    """
+    def decorator(fn):
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            start = time.perf_counter()
+            try:
+                return fn(*args, **kwargs)
+            finally:
+                elapsed = time.perf_counter() - start
+                mins, secs = divmod(int(elapsed), 60)
+                console.print(
+                    f"[bold cyan]⏱️  {label} complete in {mins:02d}:{secs:02d}[/bold cyan]"
+                )
+
+        return wrapper
+
+    return decorator
+
+
+@_timed("load-local")
 def load_local(year: int | None = None):
     """Load data to local PostgreSQL database."""
     local_url = _local_url()
@@ -30,6 +67,26 @@ def load_local(year: int | None = None):
     load_all(year=year)
 
 
+def _spinner_progress(description: str) -> Progress:
+    """Indeterminate spinner + elapsed-time bar for subprocess steps.
+
+    Rich runs its live display on an internal thread, so the spinner keeps
+    ticking while the main thread blocks inside subprocess.run / wait.
+
+    transient=False — pg_dump + psql restore are network/process I/O that
+    can take minutes; we want the elapsed time to persist in the log.
+    """
+    return Progress(
+        SpinnerColumn(),
+        TextColumn(f"[bold]{description}"),
+        BarColumn(bar_width=30),
+        TimeElapsedColumn(),
+        console=console,
+        transient=False,
+    )
+
+
+@_timed("sync-to-neon")
 def sync_to_neon():
     """Export local database and upload to Neon."""
     print("\n📦 Exporting local database and uploading to Neon...\n")
@@ -41,49 +98,52 @@ def sync_to_neon():
         sys.exit(1)
 
     local_url = _local_url()
-
-    # Temporary dump file
     dump_file = "/tmp/fantasy_baseball_dump.sql"
 
+    # --- Step 1: pg_dump ---
     print("🔄 Step 1: Exporting local database...")
     print(f"   Source: {local_url}")
     print(f"   Output: {dump_file}\n")
 
-    # pg_dump accepts a connection URI as its positional dbname argument,
-    # which lets this work against both a local socket and a containerized
-    # postgres reachable via host:port.
-    pg_dump_result = subprocess.run(
-        ["pg_dump", "--clean", "--if-exists", local_url],
-        stdout=open(dump_file, "w"),
-        stderr=subprocess.PIPE,
-        text=True,
-    )
+    with _spinner_progress("🔄 pg_dump (Postgres → SQL)") as progress:
+        progress.add_task("dump", total=None)
+        # pg_dump accepts a connection URI as its positional dbname argument,
+        # which lets this work against both a local socket and a containerized
+        # postgres reachable via host:port.
+        pg_dump_result = subprocess.run(
+            ["pg_dump", "--clean", "--if-exists", local_url],
+            stdout=open(dump_file, "w"),
+            stderr=subprocess.PIPE,
+            text=True,
+        )
 
     if pg_dump_result.returncode != 0:
         print(f"❌ pg_dump failed: {pg_dump_result.stderr}")
         sys.exit(1)
 
-    print(f"   ✓ Export complete (~{os.path.getsize(dump_file) / 1024 / 1024:.1f}MB)\n")
+    dump_mb = os.path.getsize(dump_file) / 1024 / 1024
+    console.print(f"   [green]✓[/green] Export complete ([bold]{dump_mb:.1f}MB[/bold])\n")
 
+    # --- Step 2: psql upload to Neon ---
+    target_label = NEON_URL.split('@')[1] if '@' in NEON_URL else 'Neon database'
     print("📤 Step 2: Uploading to Neon...")
-    print(
-        f"   Target: {NEON_URL.split('@')[1] if '@' in NEON_URL else 'Neon database'}\n"
-    )
+    print(f"   Target: {target_label}\n")
 
-    # Upload to Neon using psql
-    psql_result = subprocess.run(
-        ["psql", NEON_URL],
-        stdin=open(dump_file, "r"),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
+    with _spinner_progress(f"📤 psql restore → {target_label}") as progress:
+        progress.add_task("psql", total=None)
+        psql_result = subprocess.run(
+            ["psql", NEON_URL],
+            stdin=open(dump_file, "r"),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
 
     if psql_result.returncode != 0:
         print(f"❌ psql upload failed: {psql_result.stderr}")
         sys.exit(1)
 
-    print("   ✓ Upload complete\n")
+    console.print("   [green]✓[/green] Upload complete\n")
 
     # Cleanup
     print("🧹 Cleaning up...")
@@ -93,6 +153,7 @@ def sync_to_neon():
     print("✅ Sync to Neon complete!")
 
 
+@_timed("export-parquets")
 def export_parquets():
     """Export local Postgres tables to parquet files under PARQUET_DIR."""
     print("📦 Exporting Postgres tables to parquet files...")
@@ -108,6 +169,7 @@ def export_parquets():
     print(f"\n✅ Exported {len(paths)} parquet files to {PARQUET_DIR}")
 
 
+@_timed("upload-parquets")
 def upload_parquets():
     """Upload local parquet files to R2 and record metadata in Postgres."""
     print("☁️  Uploading parquet files to R2...")
@@ -127,6 +189,7 @@ def upload_parquets():
     )
 
 
+@_timed("parquet-and-sync")
 def parquet_and_sync():
     """Parquet pipeline: export local Postgres -> parquet -> upload to R2.
 
@@ -143,6 +206,7 @@ def parquet_and_sync():
     print("\n✅ Complete! Parquets exported and uploaded to R2.")
 
 
+@_timed("verify-r2")
 def verify_r2():
     """Verify each R2 object matches its parquet_artifacts row.
 
@@ -172,6 +236,7 @@ def verify_r2():
     print("\n✅ All R2 objects verified.")
 
 
+@_timed("load-and-sync")
 def load_and_sync(year: int | None = None):
     """Load local -> export parquets -> upload parquets to R2 -> sync to Neon."""
     print(
@@ -205,6 +270,7 @@ def load_and_sync(year: int | None = None):
     )
 
 
+@_timed("verify")
 def verify():
     """Verify database tables and data."""
     from .verification import verify_database

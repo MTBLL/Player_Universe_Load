@@ -8,6 +8,19 @@ from typing import Any
 
 import psycopg2
 from dotenv import load_dotenv
+from rich.console import Console
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+)
+
+# Single global console keeps Rich output consistent across modules and
+# behaves correctly under pytest capsys (writes through sys.stdout).
+console = Console()
 
 # Load .env from project root so DATABASE_URL is available in os.environ
 load_dotenv()
@@ -60,11 +73,9 @@ def init_schema(conn) -> None:
 
 
 def bulk_insert(conn, table: str, columns: list[str], rows: list[tuple]) -> int:
-    """Bulk insert rows into table."""
+    """Bulk insert rows into table with a Rich progress bar for large inserts."""
     if not rows:
         return 0
-
-    print(f"   💾 Inserting {len(rows):,} rows into {table}...", end="", flush=True)
 
     with conn.cursor() as cur:
         placeholders = ",".join(["%s"] * len(columns))
@@ -73,7 +84,6 @@ def bulk_insert(conn, table: str, columns: list[str], rows: list[tuple]) -> int:
 
         # For player_stats tables, use ON CONFLICT DO UPDATE to handle two-way players
         if table in ("player_stats_batting", "player_stats_pitching"):
-            # Update all columns except the unique constraint columns
             update_cols = [
                 c for c in columns if c not in ("player_id", "season_id", "stat_period")
             ]
@@ -82,23 +92,38 @@ def bulk_insert(conn, table: str, columns: list[str], rows: list[tuple]) -> int:
         else:
             sql = f"INSERT INTO {table} ({cols}) VALUES ({placeholders}) ON CONFLICT DO NOTHING"
 
-        # Show progress for large inserts
+        # Live progress bar only for batched inserts. Small inserts skip
+        # the bar AND skip the "✓ Inserted" summary line — they happen too
+        # fast to be worth either log artifact.
         if len(rows) > 100:
             batch_size = 100
-            for i in range(0, len(rows), batch_size):
-                batch = rows[i : i + batch_size]
-                cur.executemany(sql, batch)
-                progress = min(i + batch_size, len(rows))
-                print(
-                    f"\r   💾 Inserting {len(rows):,} rows into {table}... {progress:,}/{len(rows):,}",
-                    end="",
-                    flush=True,
-                )
+            # transient=False — Postgres inserts are network/SQL API work,
+            # persist the bar so elapsed time stays in the log. The persisted
+            # bar IS the log entry; no separate "✓ Inserted" follow-up.
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[bold]💾 {task.description}"),
+                BarColumn(bar_width=30),
+                MofNCompleteColumn(),
+                TextColumn("rows"),
+                TimeElapsedColumn(),
+                console=console,
+                transient=False,
+            ) as progress:
+                task = progress.add_task(table, total=len(rows))
+                for i in range(0, len(rows), batch_size):
+                    batch = rows[i : i + batch_size]
+                    cur.executemany(sql, batch)
+                    progress.update(task, advance=len(batch))
+            conn.commit()
         else:
             cur.executemany(sql, rows)
+            conn.commit()
+            console.print(
+                f"   [green]✓[/green] Inserted [bold]{len(rows):,}[/bold] rows into "
+                f"[cyan]{table}[/cyan]"
+            )
 
-    conn.commit()
-    print(f"\r   ✓ Inserted {len(rows):,} rows into {table}     ")
     return len(rows)
 
 
