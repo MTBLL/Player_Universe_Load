@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """CLI commands for Player Universe Load."""
 
+import functools
 import os
 import subprocess
 import sys
+import time
 
 from dotenv import load_dotenv
 
@@ -28,6 +30,33 @@ def _local_url() -> str:
     return os.environ.get("LOCAL_DATABASE_URL", DEFAULT_LOCAL_URL)
 
 
+def _timed(label: str):
+    """Decorator: print a persistent elapsed-time line when fn completes.
+
+    Used on every public CLI subcommand so the operator always gets a
+    final "⏱️ <label> complete in MM:SS" line — including the wrapping
+    `load-and-sync` invocation, which gives the total pipeline time even
+    though each sub-step also reports its own elapsed.
+    """
+    def decorator(fn):
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            start = time.perf_counter()
+            try:
+                return fn(*args, **kwargs)
+            finally:
+                elapsed = time.perf_counter() - start
+                mins, secs = divmod(int(elapsed), 60)
+                console.print(
+                    f"[bold cyan]⏱️  {label} complete in {mins:02d}:{secs:02d}[/bold cyan]"
+                )
+
+        return wrapper
+
+    return decorator
+
+
+@_timed("load-local")
 def load_local(year: int | None = None):
     """Load data to local PostgreSQL database."""
     local_url = _local_url()
@@ -39,10 +68,13 @@ def load_local(year: int | None = None):
 
 
 def _spinner_progress(description: str) -> Progress:
-    """Indeterminate spinner + elapsed-time bar.
+    """Indeterminate spinner + elapsed-time bar for subprocess steps.
 
     Rich runs its live display on an internal thread, so the spinner keeps
     ticking while the main thread blocks inside subprocess.run / wait.
+
+    transient=False — pg_dump + psql restore are network/process I/O that
+    can take minutes; we want the elapsed time to persist in the log.
     """
     return Progress(
         SpinnerColumn(),
@@ -50,10 +82,11 @@ def _spinner_progress(description: str) -> Progress:
         BarColumn(bar_width=30),
         TimeElapsedColumn(),
         console=console,
-        transient=True,
+        transient=False,
     )
 
 
+@_timed("sync-to-neon")
 def sync_to_neon():
     """Export local database and upload to Neon."""
     print("\n📦 Exporting local database and uploading to Neon...\n")
@@ -120,6 +153,7 @@ def sync_to_neon():
     print("✅ Sync to Neon complete!")
 
 
+@_timed("export-parquets")
 def export_parquets():
     """Export local Postgres tables to parquet files under PARQUET_DIR."""
     print("📦 Exporting Postgres tables to parquet files...")
@@ -135,6 +169,7 @@ def export_parquets():
     print(f"\n✅ Exported {len(paths)} parquet files to {PARQUET_DIR}")
 
 
+@_timed("upload-parquets")
 def upload_parquets():
     """Upload local parquet files to R2 and record metadata in Postgres."""
     print("☁️  Uploading parquet files to R2...")
@@ -154,6 +189,7 @@ def upload_parquets():
     )
 
 
+@_timed("parquet-and-sync")
 def parquet_and_sync():
     """Parquet pipeline: export local Postgres -> parquet -> upload to R2.
 
@@ -170,6 +206,7 @@ def parquet_and_sync():
     print("\n✅ Complete! Parquets exported and uploaded to R2.")
 
 
+@_timed("verify-r2")
 def verify_r2():
     """Verify each R2 object matches its parquet_artifacts row.
 
@@ -199,6 +236,7 @@ def verify_r2():
     print("\n✅ All R2 objects verified.")
 
 
+@_timed("load-and-sync")
 def load_and_sync(year: int | None = None):
     """Load local -> export parquets -> upload parquets to R2 -> sync to Neon."""
     print(
@@ -232,6 +270,7 @@ def load_and_sync(year: int | None = None):
     )
 
 
+@_timed("verify")
 def verify():
     """Verify database tables and data."""
     from .verification import verify_database

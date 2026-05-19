@@ -319,7 +319,12 @@ def verify_all(
 
 
 def _progress(title: str) -> Progress:
-    """Per-table progress bar config shared by upload_all + verify_all."""
+    """Per-table progress bar config shared by upload_all + verify_all.
+
+    transient=False — these are S3 round-trips (real network I/O), so we
+    persist the final bar in stdout. Elapsed time stays visible as a
+    record of how long the upload/verify took.
+    """
     return Progress(
         SpinnerColumn(),
         TextColumn(f"[bold]{title}"),
@@ -328,7 +333,7 @@ def _progress(title: str) -> Progress:
         TextColumn("[dim]{task.fields[current]}"),
         TimeElapsedColumn(),
         console=console,
-        transient=True,
+        transient=False,
     )
 
 

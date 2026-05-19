@@ -92,10 +92,14 @@ def bulk_insert(conn, table: str, columns: list[str], rows: list[tuple]) -> int:
         else:
             sql = f"INSERT INTO {table} ({cols}) VALUES ({placeholders}) ON CONFLICT DO NOTHING"
 
-        # Show a live progress bar only for batched inserts; small inserts
-        # complete in a single executemany call and don't need one.
+        # Live progress bar only for batched inserts. Small inserts skip
+        # the bar AND skip the "✓ Inserted" summary line — they happen too
+        # fast to be worth either log artifact.
         if len(rows) > 100:
             batch_size = 100
+            # transient=False — Postgres inserts are network/SQL API work,
+            # persist the bar so elapsed time stays in the log. The persisted
+            # bar IS the log entry; no separate "✓ Inserted" follow-up.
             with Progress(
                 SpinnerColumn(),
                 TextColumn("[bold]💾 {task.description}"),
@@ -104,18 +108,22 @@ def bulk_insert(conn, table: str, columns: list[str], rows: list[tuple]) -> int:
                 TextColumn("rows"),
                 TimeElapsedColumn(),
                 console=console,
-                transient=True,  # progress bar disappears after completion
+                transient=False,
             ) as progress:
                 task = progress.add_task(table, total=len(rows))
                 for i in range(0, len(rows), batch_size):
                     batch = rows[i : i + batch_size]
                     cur.executemany(sql, batch)
                     progress.update(task, advance=len(batch))
+            conn.commit()
         else:
             cur.executemany(sql, rows)
+            conn.commit()
+            console.print(
+                f"   [green]✓[/green] Inserted [bold]{len(rows):,}[/bold] rows into "
+                f"[cyan]{table}[/cyan]"
+            )
 
-    conn.commit()
-    console.print(f"   [green]✓[/green] Inserted [bold]{len(rows):,}[/bold] rows into [cyan]{table}[/cyan]")
     return len(rows)
 
 

@@ -196,6 +196,8 @@ def export_table(conn, table: str, target_dir: Path = PARQUET_DIR) -> Path:
 def export_all(conn, target_dir: Path = PARQUET_DIR) -> list[Path]:
     """Export every table in EXPORTED_TABLES; return list of written paths."""
     paths: list[Path] = []
+    # transient=False: parquet export is disk I/O (file writes), persist
+    # the bar + elapsed time in the log.
     with Progress(
         SpinnerColumn(),
         TextColumn("[bold]📦 Exporting to parquet"),
@@ -204,7 +206,7 @@ def export_all(conn, target_dir: Path = PARQUET_DIR) -> list[Path]:
         TextColumn("[dim]{task.fields[current]}"),
         TimeElapsedColumn(),
         console=console,
-        transient=True,
+        transient=False,
     ) as progress:
         task = progress.add_task("export", total=len(EXPORTED_TABLES), current="")
         for table in EXPORTED_TABLES:
