@@ -8,11 +8,23 @@
 # 1. Load to local PostgreSQL (30 seconds)
 uv run player-universe-load load-local
 
-# 2. Export and upload to Neon (2-3 minutes)
+# 2. Export columnar parquet artifacts for analytics (~3 seconds)
+uv run player-universe-load export-parquets
+
+# 3. Upload parquets to Cloudflare R2 + record metadata (~10 seconds)
+uv run player-universe-load upload-parquets
+
+# 4. Export and upload to Neon (2-3 minutes)
 uv run player-universe-load sync-to-neon
 ```
 
 **Total time: ~3 minutes** (vs 60+ minutes for direct remote loading!)
+
+The `load-and-sync` command runs all four steps in order. Four output
+targets in one invocation: local Postgres → parquet files → R2 → Neon.
+The `parquet_artifacts` table in Postgres tracks the R2 objects (object_key,
+sha256, size, row_count) so the viz app can query Hasura for current
+artifact pointers and fetch from R2 directly.
 
 See **[QUICK_START.md](QUICK_START.md)** for detailed instructions.
 
@@ -70,7 +82,7 @@ All functionality is available through the unified CLI.
 ### Main Workflow Commands
 
 #### 1. `load-and-sync` (Recommended)
-Full workflow: load locally and sync to Neon in one command.
+Full workflow: load locally, export parquets, then sync to Neon.
 
 ```bash
 uv run player-universe-load load-and-sync
@@ -78,6 +90,7 @@ uv run player-universe-load load-and-sync
 
 **What it does:**
 - Loads all data to local PostgreSQL
+- Exports all 12 tables to parquet at `/Users/Shared/BaseballHQ/resources/analytics/`
 - Exports local database with `pg_dump`
 - Uploads to Neon with `psql`
 - **Total time: ~3 minutes**
@@ -98,7 +111,63 @@ uv run player-universe-load load-local
 - Shows real-time progress
 - **Completes in ~30 seconds**
 
-#### 3. `sync-to-neon`
+#### 3. `export-parquets`
+Reads the local Postgres tables and writes one parquet file per table for
+downstream analytics (DuckDB / Polars / Pandas / Arrow).
+
+```bash
+uv run player-universe-load export-parquets
+```
+
+**What it does:**
+- Reads each of the 12 tables from local Postgres
+- JSONB columns are JSON-string-encoded (heterogeneous shapes break pyarrow
+  inference); readers can `json.loads()` to recover structure
+- `Decimal('Infinity')` / `Decimal('NaN')` from NUMERIC columns sanitized to `NULL`
+- Writes to `<table>.parquet.tmp` and atomically renames to `<table>.parquet`
+  (POSIX `rename` semantics) so concurrent readers never see partial files
+- Output: 12 `.parquet` files (zstd compressed) in
+  `/Users/Shared/BaseballHQ/resources/analytics/`
+- **Completes in ~3 seconds**
+
+Example query with DuckDB:
+
+```bash
+duckdb -c "SELECT COUNT(*) FROM read_parquet('/Users/Shared/BaseballHQ/resources/analytics/players.parquet')"
+```
+
+#### 4. `upload-parquets`
+Uploads the local parquet files to Cloudflare R2 (or any S3-compatible
+object store) and records metadata in the `parquet_artifacts` table.
+
+```bash
+uv run player-universe-load upload-parquets
+```
+
+**What it does:**
+- Reads each `.parquet` file from `/Users/Shared/BaseballHQ/resources/analytics/`
+- Computes sha256 by streaming the file (bounded peak memory)
+- PUTs to R2 with `ContentType: application/vnd.apache.parquet`
+- UPSERTs `parquet_artifacts` row keyed on `table_name` (one row per table,
+  always reflects the latest upload)
+- Records: `object_key`, `bucket`, `endpoint`, `sha256`, `etag`, `size_bytes`,
+  `row_count`, `uploaded_at`
+- **Completes in ~10 seconds** for the full 12-table set
+
+**Required env vars** (in `.env`):
+```bash
+R2_ACCOUNT_ID=...
+R2_ACCESS_KEY_ID=...
+R2_SECRET_ACCESS_KEY=...
+R2_BUCKET=...
+R2_ENDPOINT=https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com
+```
+
+S3 PUT is atomic per object — readers always see either the previous
+version or the new one, never a partial. Verification via sha256
+comparison is the recommended pattern downstream.
+
+#### 5. `sync-to-neon`
 Exports local database and uploads to Neon.
 
 ```bash
@@ -115,7 +184,38 @@ uv run player-universe-load sync-to-neon
 
 ### Utility Commands
 
-#### 4. `verify`
+#### 6. `parquet-and-sync`
+Parquet-only pipeline: export + upload, without touching the database load
+or Neon sync. Useful when local Postgres is already current and you just
+want to refresh R2.
+
+```bash
+uv run player-universe-load parquet-and-sync
+```
+
+**What it does:**
+- Runs `export-parquets`
+- Then runs `upload-parquets`
+- **Completes in ~13 seconds**
+
+#### 7. `verify-r2`
+Downloads each R2 object, verifies parquet PAR1 magic + sha256 against
+the recorded `parquet_artifacts` row. Exits non-zero on any mismatch.
+
+```bash
+uv run player-universe-load verify-r2
+```
+
+**What it does:**
+- For every row in `parquet_artifacts`:
+  - GET the object from R2
+  - Check size matches `size_bytes`
+  - Check first 4 bytes are `PAR1` (parquet file signature)
+  - Recompute sha256 and compare against `sha256`
+- Prints per-table result, total ok/failed counts
+- **Completes in ~5 seconds** for the full 12-table set
+
+#### 8. `verify`
 Verify database structure and query capabilities.
 
 ```bash
@@ -458,6 +558,7 @@ Player_Universe_Load/
 ├── player_universe_load/       # Main Python package
 │   ├── schemas/                # SQL schema files (01-12)
 │   ├── loaders/                # Data loaders
+│   ├── exporters/              # Output artifact emitters (parquet, ...)
 │   ├── validation/             # Schema validation
 │   ├── cli.py                  # CLI commands
 │   ├── db.py                   # Database utilities
@@ -466,7 +567,8 @@ Player_Universe_Load/
 │   └── secrets.py              # DB credentials (gitignored)
 ├── tests/
 │   ├── fixtures/               # JSON data files
-│   └── test_load_integration.py
+│   ├── test_load_integration.py
+│   └── test_parquet_export.py
 ├── docs/
 │   └── postgres_schema_design.md
 ├── README.md                   # Main documentation

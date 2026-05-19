@@ -1,12 +1,16 @@
+[![codecov](https://codecov.io/gh/MTBLL/Player_Universe_Load/graph/badge.svg?token=FQid9UjEFi)](https://codecov.io/gh/MTBLL/Player_Universe_Load)
+
 # Player Universe Load
 
 This project loads fantasy baseball data (players, teams, leagues, stats, projections, valuations) into PostgreSQL using a **local-first approach** for fast, efficient database population.
 
 ## Overview
 
-The system transforms fixture data from JSON files and loads it into a PostgreSQL database. Instead of directly inserting to a remote database (slow), we:
-1. Load to **local PostgreSQL** (30 seconds)
-2. Export and upload to **Neon** via `pg_dump` (2-3 minutes)
+The system transforms fixture data from JSON files and emits **four** output artifacts:
+1. Load to **local PostgreSQL** (30 seconds) — fast queries during pipeline runs
+2. Export **parquet files** to `/Users/Shared/BaseballHQ/resources/analytics/` (~3 seconds) — columnar artifact for downstream viz/notebook consumption via DuckDB / Polars / Pandas / Arrow
+3. Upload parquets to **Cloudflare R2** (~10 seconds) — durable object storage with zero egress; metadata (object_key + sha256 + row_count) recorded in `parquet_artifacts` table
+4. Export and upload to **Neon** via `pg_dump` (2-3 minutes) — durable remote copy, queryable via Hasura GraphQL. The `parquet_artifacts` rows travel with the dump so Neon/Hasura clients see current R2 pointers.
 
 **Total time: ~3 minutes** (vs 60+ minutes for direct remote loading!)
 
@@ -18,26 +22,33 @@ See **[QUICK_START.md](QUICK_START.md)** for the fastest way to get started.
 
 **TL;DR:**
 ```bash
-# 1. Load to local PostgreSQL (30 seconds)
-uv run player-universe-load load-local
+# Run all three steps in one command
+uv run player-universe-load load-and-sync
 
-# 2. Export and upload to Neon (2-3 minutes)
-uv run player-universe-load sync-to-neon
+# Or step by step:
+uv run player-universe-load load-local         # local Postgres
+uv run player-universe-load export-parquets    # /Users/Shared/BaseballHQ/resources/analytics/*.parquet
+uv run player-universe-load sync-to-neon       # remote Neon
 ```
 
 ---
 
 ## What Gets Loaded
 
-From fixture files in `tests/fixtures/`:
+Production volumes (ETL pipeline output read from
+`/Users/Shared/BaseballHQ/resources/{load,transform}/`):
 
-- **2,940 players** (1,405 hitters + 1,535 pitchers)
-- **17,734 stat records** (batting + pitching, multiple time periods)
-- **2,940 projections** (FanGraphs)
-- **2,939 valuations** (z-scores, dollar values, tiers)
+- **~3,400 players** (~1,640 hitters + ~1,770 pitchers)
+- **~21,000 stat records** (batting + pitching across 9 stat periods:
+  ESPN proj/current/previous/last_7/last_15/last_30 + Savant all/vs_r/vs_l)
+- **~12,000 projections** (Fangraphs preseason/updated/ros + Savant blobs)
+- **~10,000 valuations** across 5 scenarios (preseason/updated/ros/synthetic/current)
 - **1 league** with 12 scoring categories
-- **11 teams** with 258 roster slots
-- **110 matchups** (schedule)
+- **12 teams** with ~290 roster slots
+- **84 matchups** (schedule)
+
+`tests/fixtures/` holds a slim 200-player sample (deterministic seed) used by
+CI; production data lives outside the repo.
 
 ---
 
@@ -102,6 +113,8 @@ player_universe_load/          # Main Python package
 │   ├── leagues.py            # League settings
 │   ├── matchups.py           # Schedule
 │   └── teams.py              # Teams + rosters
+├── exporters/                 # Output artifact emitters
+│   └── parquet.py            # Postgres → parquet for downstream analytics
 ├── validation/                # Schema validation
 │   └── schema_validator.py   # Validate data vs DB schema
 ├── cli.py                     # CLI commands
@@ -163,12 +176,152 @@ tests/fixtures/                # JSON data files
 ### Load Data
 
 ```bash
-# Step 1: Load to local PostgreSQL (30 seconds)
-uv run player-universe-load load-local
+# All four artifacts (local Postgres + parquets + R2 + Neon)
+uv run player-universe-load load-and-sync
 
-# Step 2: Export and upload to Neon (2-3 minutes)
-uv run player-universe-load sync-to-neon
+# Or step-by-step:
+uv run player-universe-load load-local         # local Postgres (30s)
+uv run player-universe-load export-parquets    # parquet files (~3s)
+uv run player-universe-load upload-parquets    # parquets -> R2 + metadata (~10s)
+uv run player-universe-load sync-to-neon       # Neon (2-3 min)
+
+# Parquet-only refresh (export + upload to R2)
+uv run player-universe-load parquet-and-sync
+
+# Integrity check: sha256 + PAR1 magic for every R2 object
+uv run player-universe-load verify-r2
 ```
+
+---
+
+## Accessing the Data
+
+### Reading from Neon (Postgres / Hasura)
+
+Neon hosts the full relational dataset (14 tables: players, teams, leagues,
+matchups, roster_slots, stats, projections, valuations + details,
+parquet_artifacts, position_summary, etc.).
+
+**Direct psql:**
+```bash
+# NEON_DATABASE_URL is in .env at the project root
+psql "$NEON_DATABASE_URL"
+```
+
+**Programmatic (Python + psycopg2):**
+```python
+import os, psycopg2
+from dotenv import load_dotenv
+
+load_dotenv()
+conn = psycopg2.connect(os.environ["NEON_DATABASE_URL"])
+with conn.cursor() as cur:
+    cur.execute(
+        'SELECT name, primary_position FROM players LIMIT 5'
+    )
+    for row in cur.fetchall():
+        print(row)
+```
+
+**Via Hasura GraphQL** (if your Hasura instance is pointed at the same Neon
+DB): all 14 tables are tracked automatically via the FK graph — query players
+joined to their stats/valuations/parquet pointers in one round-trip.
+
+Connection string format: `postgresql://<user>:<pass>@<host>/<db>?sslmode=require`.
+Neon requires TLS; psycopg2 handles it transparently.
+
+### Reading from Cloudflare R2 (parquet files)
+
+R2 hosts the columnar artifact set, one parquet per Postgres table, atomically
+overwritten on every `upload-parquets` run. **The `parquet_artifacts` table in
+Neon is the source of truth for "what's the latest object key and sha256"** —
+clients should query Postgres first, then GET from R2 and verify.
+
+**Discover what's available:**
+```sql
+-- run against Neon
+SELECT table_name, object_key, sha256, size_bytes, row_count, uploaded_at
+FROM parquet_artifacts
+ORDER BY table_name;
+```
+
+**DuckDB (recommended for ad-hoc analytics):**
+```bash
+# Configure R2 credentials once per session
+export AWS_ACCESS_KEY_ID=$R2_ACCESS_KEY_ID
+export AWS_SECRET_ACCESS_KEY=$R2_SECRET_ACCESS_KEY
+export AWS_ENDPOINT_URL=$R2_ENDPOINT
+export AWS_REGION=auto
+
+duckdb -c "
+  INSTALL httpfs; LOAD httpfs;
+  SET s3_endpoint='${R2_ENDPOINT#https://}';
+  SET s3_access_key_id='$R2_ACCESS_KEY_ID';
+  SET s3_secret_access_key='$R2_SECRET_ACCESS_KEY';
+  SET s3_url_style='path';
+  SELECT name, primary_position
+  FROM read_parquet('s3://$R2_BUCKET/players.parquet')
+  LIMIT 5;
+"
+```
+
+**Python (boto3 + pyarrow):**
+```python
+import os, io, boto3
+import pyarrow.parquet as pq
+from dotenv import load_dotenv
+
+load_dotenv()
+s3 = boto3.client(
+    "s3",
+    endpoint_url=os.environ["R2_ENDPOINT"],
+    aws_access_key_id=os.environ["R2_ACCESS_KEY_ID"],
+    aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"],
+    region_name="auto",
+)
+obj = s3.get_object(Bucket=os.environ["R2_BUCKET"], Key="players.parquet")
+table = pq.read_table(io.BytesIO(obj["Body"].read()))
+print(table.num_rows, table.column_names[:10])
+```
+
+**Polars (one-liner once endpoint is configured):**
+```python
+import polars as pl
+df = pl.read_parquet(
+    f"s3://{os.environ['R2_BUCKET']}/players.parquet",
+    storage_options={
+        "aws_access_key_id": os.environ["R2_ACCESS_KEY_ID"],
+        "aws_secret_access_key": os.environ["R2_SECRET_ACCESS_KEY"],
+        "endpoint_url": os.environ["R2_ENDPOINT"],
+        "aws_region": "auto",
+    },
+)
+```
+
+**Integrity check** (optional but recommended for long-running jobs):
+```python
+import hashlib
+expected_sha256 = "..."  # from parquet_artifacts row
+actual = hashlib.sha256(obj["Body"].read()).hexdigest()
+assert actual == expected_sha256
+```
+
+### JSONB columns in parquet
+
+JSONB columns (`eligible_slots`, `birth_place`, `projections`, `roster_settings`)
+are stored as JSON strings in parquet — pyarrow type inference can't handle the
+heterogeneous nested shapes JSONB permits. Readers should `json.loads()` to
+recover the structure:
+
+- **Python:** `import json; json.loads(row["eligible_slots"])`
+- **DuckDB:** `SELECT json_extract(eligible_slots, '$[0]') FROM ...`
+- **Polars:** `pl.col("eligible_slots").str.json_decode()`
+
+### NUMERIC precision
+
+All Postgres `NUMERIC` columns are exported as `decimal128(18, 3)` — exact
+storage of values quantized to thousandths with `ROUND_HALF_UP`. No
+IEEE-754 representation error in aggregations across millions of rows.
 
 ### Verify Data
 
@@ -272,7 +425,10 @@ uv run player-universe-load verify
 
 ### Run tests
 ```bash
+uv run pytest tests/ -v
+# Or one file:
 uv run pytest tests/test_load_integration.py -v
+uv run pytest tests/test_parquet_export.py -v
 ```
 
 ### Update schema

@@ -23,7 +23,17 @@ CREATE TABLE player_stats_batting (
     batter_run_value_per_100 NUMERIC,
     "xAVG" NUMERIC, "xOBP" NUMERIC, "xSLG" NUMERIC, "xwOBA" NUMERIC,
     "xAVGdiff" NUMERIC, "xOBPdiff" NUMERIC, "xSLGdiff" NUMERIC,
-    "BB_pct" NUMERIC, "K_pct" NUMERIC, "BBdist" INTEGER, "Kdist" INTEGER,
+    "BB_pct" NUMERIC, "K_pct" NUMERIC, "BBdist" NUMERIC, "Kdist" NUMERIC,
+    -- Savant-derived raw / quality / ranking fields
+    "BIP" NUMERIC,
+    pitches NUMERIC, total_pitches NUMERIC, pitch_percent NUMERIC,
+    run_exp NUMERIC, rate_ideal_attack_angle NUMERIC,
+    percieved_velo NUMERIC, pitch_velo NUMERIC,
+    "wOBAdiff" NUMERIC,
+    barrels_per_bbe_pct_pct_rnk NUMERIC,
+    barrels_per_pa_pct_pct_rnk NUMERIC,
+    barrels_total_pct_rnk NUMERIC,
+    hardhit_pct_pct_rnk NUMERIC,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(player_id, season_id, stat_period)
