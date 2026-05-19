@@ -8,6 +8,8 @@ import sys
 from dotenv import load_dotenv
 
 from .__main__ import load_all
+from .db import get_connection
+from .exporters import PARQUET_DIR, export_all
 
 load_dotenv()
 
@@ -91,9 +93,24 @@ def sync_to_neon():
     print("✅ Sync to Neon complete!")
 
 
+def export_parquets():
+    """Export local Postgres tables to parquet files under PARQUET_DIR."""
+    print("📦 Exporting Postgres tables to parquet files...")
+    print(f"   Target dir: {PARQUET_DIR}\n")
+
+    os.environ["DATABASE_URL"] = _local_url()
+    conn = get_connection()
+    try:
+        paths = export_all(conn)
+    finally:
+        conn.close()
+
+    print(f"\n✅ Exported {len(paths)} parquet files to {PARQUET_DIR}")
+
+
 def load_and_sync(year: int | None = None):
-    """Load to local database and sync to Neon in one command."""
-    print("🚀 Full workflow: Load local → Export → Upload to Neon\n")
+    """Load to local database, export parquets, then sync to Neon."""
+    print("🚀 Full workflow: Load local → Export parquets → Upload to Neon\n")
     print("=" * 60)
 
     # Step 1: Load locally
@@ -101,11 +118,16 @@ def load_and_sync(year: int | None = None):
 
     print("\n" + "=" * 60)
 
-    # Step 2: Sync to Neon
+    # Step 2: Export parquets (analytics artifact)
+    export_parquets()
+
+    print("\n" + "=" * 60)
+
+    # Step 3: Sync to Neon
     sync_to_neon()
 
     print("\n" + "=" * 60)
-    print("\n✅ Complete! Data loaded locally and synced to Neon.")
+    print("\n✅ Complete! Data loaded locally, exported to parquet, synced to Neon.")
 
 
 def verify():
@@ -133,6 +155,9 @@ Examples:
   # Just sync to Neon (if local DB already loaded)
   uv run player-universe-load sync-to-neon
 
+  # Just export parquets from current local DB
+  uv run player-universe-load export-parquets
+
   # Verify database
   uv run player-universe-load verify
         """,
@@ -140,7 +165,7 @@ Examples:
 
     parser.add_argument(
         "command",
-        choices=["load-and-sync", "load-local", "sync-to-neon", "verify"],
+        choices=["load-and-sync", "load-local", "sync-to-neon", "export-parquets", "verify"],
         help="Command to execute",
     )
     parser.add_argument(
@@ -158,6 +183,8 @@ Examples:
         load_local(year=args.year)
     elif args.command == "sync-to-neon":
         sync_to_neon()
+    elif args.command == "export-parquets":
+        export_parquets()
     elif args.command == "verify":
         verify()
 

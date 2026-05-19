@@ -4,9 +4,10 @@ This project loads fantasy baseball data (players, teams, leagues, stats, projec
 
 ## Overview
 
-The system transforms fixture data from JSON files and loads it into a PostgreSQL database. Instead of directly inserting to a remote database (slow), we:
-1. Load to **local PostgreSQL** (30 seconds)
-2. Export and upload to **Neon** via `pg_dump` (2-3 minutes)
+The system transforms fixture data from JSON files and emits **three** output artifacts:
+1. Load to **local PostgreSQL** (30 seconds) — fast queries during pipeline runs
+2. Export **parquet files** to `/Users/Shared/BaseballHQ/resources/analytics/` (~3 seconds) — columnar artifact for downstream viz/notebook consumption via DuckDB / Polars / Pandas / Arrow
+3. Export and upload to **Neon** via `pg_dump` (2-3 minutes) — durable remote copy, queryable via Hasura GraphQL
 
 **Total time: ~3 minutes** (vs 60+ minutes for direct remote loading!)
 
@@ -18,11 +19,13 @@ See **[QUICK_START.md](QUICK_START.md)** for the fastest way to get started.
 
 **TL;DR:**
 ```bash
-# 1. Load to local PostgreSQL (30 seconds)
-uv run player-universe-load load-local
+# Run all three steps in one command
+uv run player-universe-load load-and-sync
 
-# 2. Export and upload to Neon (2-3 minutes)
-uv run player-universe-load sync-to-neon
+# Or step by step:
+uv run player-universe-load load-local         # local Postgres
+uv run player-universe-load export-parquets    # /Users/Shared/BaseballHQ/resources/analytics/*.parquet
+uv run player-universe-load sync-to-neon       # remote Neon
 ```
 
 ---
@@ -102,6 +105,8 @@ player_universe_load/          # Main Python package
 │   ├── leagues.py            # League settings
 │   ├── matchups.py           # Schedule
 │   └── teams.py              # Teams + rosters
+├── exporters/                 # Output artifact emitters
+│   └── parquet.py            # Postgres → parquet for downstream analytics
 ├── validation/                # Schema validation
 │   └── schema_validator.py   # Validate data vs DB schema
 ├── cli.py                     # CLI commands
@@ -163,12 +168,25 @@ tests/fixtures/                # JSON data files
 ### Load Data
 
 ```bash
-# Step 1: Load to local PostgreSQL (30 seconds)
-uv run player-universe-load load-local
+# All three artifacts (local Postgres + parquets + Neon)
+uv run player-universe-load load-and-sync
 
-# Step 2: Export and upload to Neon (2-3 minutes)
-uv run player-universe-load sync-to-neon
+# Or step-by-step:
+uv run player-universe-load load-local         # local Postgres (30s)
+uv run player-universe-load export-parquets    # parquet files (~3s)
+uv run player-universe-load sync-to-neon       # Neon (2-3 min)
 ```
+
+### Query parquets
+
+```bash
+duckdb -c "SELECT name, primary_position FROM read_parquet('/Users/Shared/BaseballHQ/resources/analytics/players.parquet') LIMIT 5"
+```
+
+JSONB columns (e.g. `eligible_slots`, `birth_place`, `projections`) are stored
+as JSON strings in parquet — pyarrow type-inference doesn't accept the
+heterogeneous nested shapes that JSONB permits. Readers should `json.loads()`
+those columns to recover structure (DuckDB: `json_extract`).
 
 ### Verify Data
 
@@ -272,7 +290,10 @@ uv run player-universe-load verify
 
 ### Run tests
 ```bash
+uv run pytest tests/ -v
+# Or one file:
 uv run pytest tests/test_load_integration.py -v
+uv run pytest tests/test_parquet_export.py -v
 ```
 
 ### Update schema

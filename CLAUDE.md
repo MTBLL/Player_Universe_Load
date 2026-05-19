@@ -8,11 +8,17 @@
 # 1. Load to local PostgreSQL (30 seconds)
 uv run player-universe-load load-local
 
-# 2. Export and upload to Neon (2-3 minutes)
+# 2. Export columnar parquet artifacts for analytics (a few seconds)
+uv run player-universe-load export-parquets
+
+# 3. Export and upload to Neon (2-3 minutes)
 uv run player-universe-load sync-to-neon
 ```
 
 **Total time: ~3 minutes** (vs 60+ minutes for direct remote loading!)
+
+The `load-and-sync` command runs all three steps in order. Three output
+targets in one invocation: local Postgres → parquet files → Neon.
 
 See **[QUICK_START.md](QUICK_START.md)** for detailed instructions.
 
@@ -70,7 +76,7 @@ All functionality is available through the unified CLI.
 ### Main Workflow Commands
 
 #### 1. `load-and-sync` (Recommended)
-Full workflow: load locally and sync to Neon in one command.
+Full workflow: load locally, export parquets, then sync to Neon.
 
 ```bash
 uv run player-universe-load load-and-sync
@@ -78,6 +84,7 @@ uv run player-universe-load load-and-sync
 
 **What it does:**
 - Loads all data to local PostgreSQL
+- Exports all 12 tables to parquet at `/Users/Shared/BaseballHQ/resources/analytics/`
 - Exports local database with `pg_dump`
 - Uploads to Neon with `psql`
 - **Total time: ~3 minutes**
@@ -98,7 +105,32 @@ uv run player-universe-load load-local
 - Shows real-time progress
 - **Completes in ~30 seconds**
 
-#### 3. `sync-to-neon`
+#### 3. `export-parquets`
+Reads the local Postgres tables and writes one parquet file per table for
+downstream analytics (DuckDB / Polars / Pandas / Arrow).
+
+```bash
+uv run player-universe-load export-parquets
+```
+
+**What it does:**
+- Reads each of the 12 tables from local Postgres
+- JSONB columns are JSON-string-encoded (heterogeneous shapes break pyarrow
+  inference); readers can `json.loads()` to recover structure
+- `Decimal('Infinity')` / `Decimal('NaN')` from NUMERIC columns sanitized to `NULL`
+- Writes to `<table>.parquet.tmp` and atomically renames to `<table>.parquet`
+  (POSIX `rename` semantics) so concurrent readers never see partial files
+- Output: 12 `.parquet` files (zstd compressed) in
+  `/Users/Shared/BaseballHQ/resources/analytics/`
+- **Completes in ~3 seconds**
+
+Example query with DuckDB:
+
+```bash
+duckdb -c "SELECT COUNT(*) FROM read_parquet('/Users/Shared/BaseballHQ/resources/analytics/players.parquet')"
+```
+
+#### 4. `sync-to-neon`
 Exports local database and uploads to Neon.
 
 ```bash
@@ -115,7 +147,7 @@ uv run player-universe-load sync-to-neon
 
 ### Utility Commands
 
-#### 4. `verify`
+#### 5. `verify`
 Verify database structure and query capabilities.
 
 ```bash
@@ -458,6 +490,7 @@ Player_Universe_Load/
 ├── player_universe_load/       # Main Python package
 │   ├── schemas/                # SQL schema files (01-12)
 │   ├── loaders/                # Data loaders
+│   ├── exporters/              # Output artifact emitters (parquet, ...)
 │   ├── validation/             # Schema validation
 │   ├── cli.py                  # CLI commands
 │   ├── db.py                   # Database utilities
@@ -466,7 +499,8 @@ Player_Universe_Load/
 │   └── secrets.py              # DB credentials (gitignored)
 ├── tests/
 │   ├── fixtures/               # JSON data files
-│   └── test_load_integration.py
+│   ├── test_load_integration.py
+│   └── test_parquet_export.py
 ├── docs/
 │   └── postgres_schema_design.md
 ├── README.md                   # Main documentation
