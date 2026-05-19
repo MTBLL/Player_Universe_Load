@@ -7,8 +7,16 @@ import sys
 
 from dotenv import load_dotenv
 
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+)
+
 from .__main__ import load_all
-from .db import get_connection
+from .db import console, get_connection
 from .exporters import PARQUET_DIR, export_all, upload_all, verify_all
 
 load_dotenv()
@@ -30,6 +38,22 @@ def load_local(year: int | None = None):
     load_all(year=year)
 
 
+def _spinner_progress(description: str) -> Progress:
+    """Indeterminate spinner + elapsed-time bar.
+
+    Rich runs its live display on an internal thread, so the spinner keeps
+    ticking while the main thread blocks inside subprocess.run / wait.
+    """
+    return Progress(
+        SpinnerColumn(),
+        TextColumn(f"[bold]{description}"),
+        BarColumn(bar_width=30),
+        TimeElapsedColumn(),
+        console=console,
+        transient=True,
+    )
+
+
 def sync_to_neon():
     """Export local database and upload to Neon."""
     print("\n📦 Exporting local database and uploading to Neon...\n")
@@ -41,49 +65,52 @@ def sync_to_neon():
         sys.exit(1)
 
     local_url = _local_url()
-
-    # Temporary dump file
     dump_file = "/tmp/fantasy_baseball_dump.sql"
 
+    # --- Step 1: pg_dump ---
     print("🔄 Step 1: Exporting local database...")
     print(f"   Source: {local_url}")
     print(f"   Output: {dump_file}\n")
 
-    # pg_dump accepts a connection URI as its positional dbname argument,
-    # which lets this work against both a local socket and a containerized
-    # postgres reachable via host:port.
-    pg_dump_result = subprocess.run(
-        ["pg_dump", "--clean", "--if-exists", local_url],
-        stdout=open(dump_file, "w"),
-        stderr=subprocess.PIPE,
-        text=True,
-    )
+    with _spinner_progress("🔄 pg_dump (Postgres → SQL)") as progress:
+        progress.add_task("dump", total=None)
+        # pg_dump accepts a connection URI as its positional dbname argument,
+        # which lets this work against both a local socket and a containerized
+        # postgres reachable via host:port.
+        pg_dump_result = subprocess.run(
+            ["pg_dump", "--clean", "--if-exists", local_url],
+            stdout=open(dump_file, "w"),
+            stderr=subprocess.PIPE,
+            text=True,
+        )
 
     if pg_dump_result.returncode != 0:
         print(f"❌ pg_dump failed: {pg_dump_result.stderr}")
         sys.exit(1)
 
-    print(f"   ✓ Export complete (~{os.path.getsize(dump_file) / 1024 / 1024:.1f}MB)\n")
+    dump_mb = os.path.getsize(dump_file) / 1024 / 1024
+    console.print(f"   [green]✓[/green] Export complete ([bold]{dump_mb:.1f}MB[/bold])\n")
 
+    # --- Step 2: psql upload to Neon ---
+    target_label = NEON_URL.split('@')[1] if '@' in NEON_URL else 'Neon database'
     print("📤 Step 2: Uploading to Neon...")
-    print(
-        f"   Target: {NEON_URL.split('@')[1] if '@' in NEON_URL else 'Neon database'}\n"
-    )
+    print(f"   Target: {target_label}\n")
 
-    # Upload to Neon using psql
-    psql_result = subprocess.run(
-        ["psql", NEON_URL],
-        stdin=open(dump_file, "r"),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
+    with _spinner_progress(f"📤 psql restore → {target_label}") as progress:
+        progress.add_task("psql", total=None)
+        psql_result = subprocess.run(
+            ["psql", NEON_URL],
+            stdin=open(dump_file, "r"),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
 
     if psql_result.returncode != 0:
         print(f"❌ psql upload failed: {psql_result.stderr}")
         sys.exit(1)
 
-    print("   ✓ Upload complete\n")
+    console.print("   [green]✓[/green] Upload complete\n")
 
     # Cleanup
     print("🧹 Cleaning up...")
