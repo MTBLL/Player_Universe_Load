@@ -42,6 +42,7 @@ EXPORTED_TABLES: tuple[str, ...] = (
     "player_projections",
     "player_valuations",
     "player_valuation_details",
+    "position_summary",
 )
 # Note: parquet_artifacts is intentionally excluded — it's the Postgres-side
 # join point pointing AT the R2 objects, not itself an exported artifact.

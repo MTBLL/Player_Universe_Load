@@ -10,6 +10,7 @@ from .db import get_connection, init_schema
 from .loaders.players import load_players
 from .loaders.leagues import load_league
 from .loaders.matchups import load_matchups
+from .loaders.position_summary import load_all_position_summaries
 from .loaders.teams import load_team_roster
 from .validation import validate_data_schema
 
@@ -108,6 +109,17 @@ def load_all(year: int | None = None):
             print(f"  ✓ Team {team['team_id']} ({team['team_name']}): {counts['roster_slots']} roster slots")
         if team_files:
             print(f"\n  Total: {len(team_files)} teams, {total_rosters} roster slots")
+        print()
+
+        # Load per-position auction-pricing aggregates - from LOAD subdirs
+        print("📐 Loading position summaries...")
+        ps_counts = load_all_position_summaries(conn, player_dir)
+        if ps_counts["position_summary"]:
+            print(f"  ✓ Loaded {ps_counts['position_summary']} position_summary rows "
+                  f"across 5 scenarios")
+        else:
+            print("   ⚠️  No position_summary.csv files found "
+                  f"under {player_dir}/<scenario>/")
         print()
 
         # Load schedule/matchups (after teams) - from TRANSFORM directory

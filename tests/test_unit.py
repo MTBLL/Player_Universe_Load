@@ -482,6 +482,113 @@ def test_load_players_routes_hitter_payload_without_marker():
         conn.close()
 
 
+def test_load_position_summary_parses_csv(tmp_path: Path):
+    """One scenario dir -> one row per CSV record, with mixed null/int/float."""
+    from player_universe_load.loaders.position_summary import load_position_summary
+
+    scenario_dir = tmp_path / "preseason"
+    scenario_dir.mkdir()
+    csv = scenario_dir / "position_summary.csv"
+    # Reduced column set is fine — extra cols in real CSV map to NULL when missing,
+    # so a minimal header still exercises the integer + float + empty-string paths.
+    csv.write_text(
+        "position,role,rostered_count,replacement_tier_count,total_budget,"
+        "budget_R,budget_HR,budget_RBI,budget_SBN,budget_OBP,budget_SLG\n"
+        "C,HITTER,11,3,218.4,27.13,31.71,30.64,2.78,60.91,65.24\n"
+        # Pitcher row with empty hitter cols
+        "SP,PITCHER,12,5,,,,,,,\n"
+    )
+    conn = db.get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM position_summary WHERE valuation_type='_tst_preseason'"
+            )
+            conn.commit()
+        counts = load_position_summary(conn, scenario_dir, "_tst_preseason")
+        assert counts["position_summary"] == 2
+        with conn.cursor() as cur:
+            cur.execute(
+                'SELECT position, role, rostered_count, total_budget, "budget_R" '
+                "FROM position_summary WHERE valuation_type='_tst_preseason' "
+                "ORDER BY position"
+            )
+            rows = cur.fetchall()
+        # C/HITTER: full values
+        assert rows[0][0] == "C" and rows[0][1] == "HITTER"
+        assert rows[0][2] == 11
+        assert float(rows[0][3]) == 218.4
+        assert float(rows[0][4]) == 27.13
+        # SP/PITCHER: empty cols -> NULL
+        assert rows[1][0] == "SP" and rows[1][1] == "PITCHER"
+        assert rows[1][3] is None and rows[1][4] is None
+    finally:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM position_summary WHERE valuation_type='_tst_preseason'"
+            )
+            conn.commit()
+        conn.close()
+
+
+def test_load_position_summary_missing_csv_is_noop(tmp_path: Path):
+    from player_universe_load.loaders.position_summary import load_position_summary
+
+    scenario_dir = tmp_path / "preseason"
+    scenario_dir.mkdir()
+    conn = db.get_connection()
+    try:
+        counts = load_position_summary(conn, scenario_dir, "preseason")
+        assert counts["position_summary"] == 0
+    finally:
+        conn.close()
+
+
+def test_load_all_position_summaries_skips_missing_scenarios(tmp_path: Path):
+    """Only some of the 5 scenarios present -> total counts sum what we have."""
+    from player_universe_load.loaders.position_summary import (
+        load_all_position_summaries,
+    )
+
+    load_dir = tmp_path / "load"
+    load_dir.mkdir()
+    # Only preseason + current present; ros, updated, synthetic absent.
+    for s in ("preseason", "current"):
+        d = load_dir / s
+        d.mkdir()
+        (d / "position_summary.csv").write_text(
+            "position,role,rostered_count,replacement_tier_count,total_budget\n"
+            "OF,HITTER,30,5,400.0\n"
+        )
+    conn = db.get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM position_summary "
+                "WHERE valuation_type IN ('preseason','current') "
+                "AND position = '__tst_OF'"
+            )
+            conn.commit()
+
+        # We're going to insert real rows; rather than dirty global state,
+        # rewrite our CSV positions to a sentinel value
+        for s in ("preseason", "current"):
+            (load_dir / s / "position_summary.csv").write_text(
+                "position,role,rostered_count,replacement_tier_count,total_budget\n"
+                "__tst_OF,HITTER,30,5,400.0\n"
+            )
+
+        counts = load_all_position_summaries(conn, load_dir)
+        assert counts["position_summary"] == 2  # 2 scenarios × 1 row each
+    finally:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM position_summary WHERE position = '__tst_OF'"
+            )
+            conn.commit()
+        conn.close()
+
+
 def test_load_players_handles_no_stats_no_valuations():
     from player_universe_load.loaders.players import load_players
 
