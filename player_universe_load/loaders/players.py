@@ -2,7 +2,17 @@
 """Load players and their stats into the database."""
 
 from typing import Any
-from ..db import bulk_insert, json_serialize
+
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+)
+
+from ..db import bulk_insert, console, json_serialize
 
 
 # New nested stats shape: stats.{espn,fangraphs,savant}.{period}
@@ -271,7 +281,6 @@ def _build_pitching_row(player_id: int, season_id: int, period: str, stats: dict
 
 def load_players(conn, data: list[dict[str, Any]], season_id: int) -> dict[str, int]:
     """Load players, their stats, projections, and valuations."""
-    print(f"   📊 Processing {len(data):,} players...", flush=True)
     counts = {"players": 0, "batting": 0, "pitching": 0, "projections": 0, "valuations": 0}
 
     player_rows = []
@@ -281,13 +290,8 @@ def load_players(conn, data: list[dict[str, Any]], season_id: int) -> dict[str, 
     valuation_rows = []
     valuation_detail_rows = []
 
-    progress_interval = max(1, len(data) // 10)
-
-    for idx, player in enumerate(data):
-        if idx > 0 and idx % progress_interval == 0:
-            pct = (idx / len(data)) * 100
-            print(f"   ⏳ Processing... {idx:,}/{len(data):,} ({pct:.0f}%)", flush=True)
-
+    def _process_one(player: dict[str, Any]) -> None:
+        """Closure: append row data for one player to the parent lists."""
         player_rows.append((
             player["id_espn"],
             player.get("id_fangraphs"),
@@ -386,11 +390,26 @@ def load_players(conn, data: list[dict[str, Any]], season_id: int) -> dict[str, 
                     val.get("total_dollars"),
                 ))
 
-    print(f"\n   📝 Prepared {len(player_rows):,} player records")
-    print(f"   📝 Prepared {len(batting_rows):,} batting stat records")
-    print(f"   📝 Prepared {len(pitching_rows):,} pitching stat records")
-    print(f"   📝 Prepared {len(projection_rows):,} projection records")
-    print(f"   📝 Prepared {len(valuation_rows):,} valuation records\n")
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold]📊 Processing players"),
+        BarColumn(bar_width=30),
+        MofNCompleteColumn(),
+        TextColumn("players"),
+        TimeElapsedColumn(),
+        console=console,
+        transient=True,
+    ) as progress:
+        task = progress.add_task("players", total=len(data))
+        for player in data:
+            _process_one(player)
+            progress.update(task, advance=1)
+
+    console.print(
+        f"   [dim]📝 Prepared {len(player_rows):,} players, "
+        f"{len(batting_rows):,} batting, {len(pitching_rows):,} pitching, "
+        f"{len(projection_rows):,} projections, {len(valuation_rows):,} valuations[/dim]"
+    )
 
     counts["players"] = bulk_insert(conn, "players", [
         "id_espn", "id_fangraphs", "id_xmlbam", "name", "first_name", "last_name",
