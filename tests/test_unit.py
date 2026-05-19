@@ -733,6 +733,8 @@ def test_cli_main_each_command(monkeypatch):
         ("sync-to-neon", "player_universe_load.cli.sync_to_neon"),
         ("export-parquets", "player_universe_load.cli.export_parquets"),
         ("upload-parquets", "player_universe_load.cli.upload_parquets"),
+        ("parquet-and-sync", "player_universe_load.cli.parquet_and_sync"),
+        ("verify-r2", "player_universe_load.cli.verify_r2"),
         ("verify", "player_universe_load.cli.verify"),
     ]:
         monkeypatch.setattr(sys, "argv", ["player-universe-load", cmd])

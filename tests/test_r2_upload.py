@@ -290,3 +290,208 @@ def test_cli_main_upload_parquets_subcommand(monkeypatch):
     with patch("player_universe_load.cli.upload_parquets") as up:
         assert cli.main() == 0
         up.assert_called_once()
+
+
+# -------------------- verify_table / verify_all --------------------
+
+
+def _seed_artifact(conn, table_name: str, sha256: str, size_bytes: int,
+                   object_key: str | None = None) -> None:
+    """Insert/update one parquet_artifacts row for verify tests."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO parquet_artifacts
+              (table_name, object_key, bucket, endpoint, sha256, etag,
+               size_bytes, row_count)
+            VALUES (%s, %s, 'b', 'e', %s, NULL, %s, 0)
+            ON CONFLICT (table_name) DO UPDATE SET
+              object_key = EXCLUDED.object_key,
+              sha256 = EXCLUDED.sha256,
+              size_bytes = EXCLUDED.size_bytes
+            """,
+            (table_name, object_key or f"{table_name}.parquet", sha256, size_bytes),
+        )
+    conn.commit()
+
+
+def _fake_s3_returning(body_bytes: bytes) -> MagicMock:
+    s3 = MagicMock()
+    body = MagicMock()
+    body.read.return_value = body_bytes
+    s3.get_object.return_value = {"Body": body}
+    return s3
+
+
+def test_verify_table_ok(cfg):
+    payload = b"PAR1\x00\x01\x02" + b"x" * 100 + b"PAR1"
+    conn = db.get_connection()
+    try:
+        _seed_artifact(conn, "_vt_ok", hashlib.sha256(payload).hexdigest(), len(payload))
+        result = r2.verify_table(conn, "_vt_ok", cfg, s3=_fake_s3_returning(payload))
+        assert result["ok"] is True
+        assert result["sha256"] == hashlib.sha256(payload).hexdigest()
+    finally:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM parquet_artifacts WHERE table_name = '_vt_ok'")
+            conn.commit()
+        conn.close()
+
+
+def test_verify_table_no_metadata_row(cfg):
+    s3 = MagicMock()
+    conn = db.get_connection()
+    try:
+        result = r2.verify_table(conn, "_vt_missing_row", cfg, s3=s3)
+        assert result["ok"] is False
+        assert result["error"] == "no parquet_artifacts row"
+        s3.get_object.assert_not_called()
+    finally:
+        conn.close()
+
+
+def test_verify_table_get_failure(cfg):
+    conn = db.get_connection()
+    try:
+        _seed_artifact(conn, "_vt_gf", "0" * 64, 100)
+        s3 = MagicMock()
+        s3.get_object.side_effect = RuntimeError("connection reset")
+        result = r2.verify_table(conn, "_vt_gf", cfg, s3=s3)
+        assert result["ok"] is False
+        assert "GET failed" in result["error"]
+    finally:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM parquet_artifacts WHERE table_name = '_vt_gf'")
+            conn.commit()
+        conn.close()
+
+
+def test_verify_table_size_mismatch(cfg):
+    payload = b"PAR1\x00abc"
+    conn = db.get_connection()
+    try:
+        _seed_artifact(conn, "_vt_size", hashlib.sha256(payload).hexdigest(), 9999)
+        result = r2.verify_table(conn, "_vt_size", cfg, s3=_fake_s3_returning(payload))
+        assert result["ok"] is False
+        assert "size mismatch" in result["error"]
+    finally:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM parquet_artifacts WHERE table_name = '_vt_size'")
+            conn.commit()
+        conn.close()
+
+
+def test_verify_table_bad_magic(cfg):
+    payload = b"NOPE\x00abc"
+    conn = db.get_connection()
+    try:
+        _seed_artifact(conn, "_vt_magic", hashlib.sha256(payload).hexdigest(), len(payload))
+        result = r2.verify_table(conn, "_vt_magic", cfg, s3=_fake_s3_returning(payload))
+        assert result["ok"] is False
+        assert "bad magic" in result["error"]
+    finally:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM parquet_artifacts WHERE table_name = '_vt_magic'")
+            conn.commit()
+        conn.close()
+
+
+def test_verify_table_sha256_mismatch(cfg):
+    actual = b"PAR1\x00other-bytes"
+    conn = db.get_connection()
+    try:
+        # Recorded sha is for different bytes
+        recorded_sha = hashlib.sha256(b"different content entirely").hexdigest()
+        _seed_artifact(conn, "_vt_sha", recorded_sha, len(actual))
+        result = r2.verify_table(conn, "_vt_sha", cfg, s3=_fake_s3_returning(actual))
+        assert result["ok"] is False
+        assert "sha256 mismatch" in result["error"]
+    finally:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM parquet_artifacts WHERE table_name = '_vt_sha'")
+            conn.commit()
+        conn.close()
+
+
+def test_verify_all_iterates_tables(cfg):
+    payload = b"PAR1\x00\x01"
+    conn = db.get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM parquet_artifacts WHERE table_name LIKE '_va_%'")
+            conn.commit()
+        for name in ("_va_a", "_va_b", "_va_c"):
+            _seed_artifact(conn, name, hashlib.sha256(payload).hexdigest(), len(payload))
+
+        with patch.object(r2, "_s3_client", return_value=_fake_s3_returning(payload)):
+            results = r2.verify_all(conn, cfg)
+        # Filter to our seeded tables since real artifacts may also be present
+        ours = [r for r in results if r["table"].startswith("_va_")]
+        assert len(ours) == 3
+        assert all(r["ok"] for r in ours)
+    finally:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM parquet_artifacts WHERE table_name LIKE '_va_%'")
+            conn.commit()
+        conn.close()
+
+
+# -------------------- CLI: parquet-and-sync + verify-r2 --------------------
+
+
+def test_cli_parquet_and_sync_chains(monkeypatch):
+    from player_universe_load import cli
+
+    with patch("player_universe_load.cli.export_parquets") as ep, \
+         patch("player_universe_load.cli.upload_parquets") as up:
+        cli.parquet_and_sync()
+        ep.assert_called_once()
+        up.assert_called_once()
+
+
+def test_cli_verify_r2_all_pass(monkeypatch, capsys):
+    from player_universe_load import cli
+
+    fake_results = [
+        {"table": "t1", "ok": True, "size_bytes": 100,
+         "object_key": "t1.parquet", "sha256": "x" * 64},
+        {"table": "t2", "ok": True, "size_bytes": 200,
+         "object_key": "t2.parquet", "sha256": "y" * 64},
+    ]
+    with patch("player_universe_load.cli.verify_all", return_value=fake_results):
+        cli.verify_r2()
+    out = capsys.readouterr().out
+    assert "2 ok, 0 failed" in out
+    assert "All R2 objects verified" in out
+
+
+def test_cli_verify_r2_some_fail_exits_nonzero(monkeypatch):
+    from player_universe_load import cli
+
+    fake_results = [
+        {"table": "t1", "ok": True, "size_bytes": 100},
+        {"table": "t2", "ok": False, "error": "sha256 mismatch"},
+    ]
+    with patch("player_universe_load.cli.verify_all", return_value=fake_results):
+        with pytest.raises(SystemExit):
+            cli.verify_r2()
+
+
+def test_cli_main_parquet_and_sync_subcommand(monkeypatch):
+    import sys
+    from player_universe_load import cli
+
+    monkeypatch.setattr(sys, "argv", ["player-universe-load", "parquet-and-sync"])
+    with patch("player_universe_load.cli.parquet_and_sync") as pas:
+        assert cli.main() == 0
+        pas.assert_called_once()
+
+
+def test_cli_main_verify_r2_subcommand(monkeypatch):
+    import sys
+    from player_universe_load import cli
+
+    monkeypatch.setattr(sys, "argv", ["player-universe-load", "verify-r2"])
+    with patch("player_universe_load.cli.verify_r2") as v:
+        assert cli.main() == 0
+        v.assert_called_once()

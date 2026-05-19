@@ -184,7 +184,38 @@ uv run player-universe-load sync-to-neon
 
 ### Utility Commands
 
-#### 6. `verify`
+#### 6. `parquet-and-sync`
+Parquet-only pipeline: export + upload, without touching the database load
+or Neon sync. Useful when local Postgres is already current and you just
+want to refresh R2.
+
+```bash
+uv run player-universe-load parquet-and-sync
+```
+
+**What it does:**
+- Runs `export-parquets`
+- Then runs `upload-parquets`
+- **Completes in ~13 seconds**
+
+#### 7. `verify-r2`
+Downloads each R2 object, verifies parquet PAR1 magic + sha256 against
+the recorded `parquet_artifacts` row. Exits non-zero on any mismatch.
+
+```bash
+uv run player-universe-load verify-r2
+```
+
+**What it does:**
+- For every row in `parquet_artifacts`:
+  - GET the object from R2
+  - Check size matches `size_bytes`
+  - Check first 4 bytes are `PAR1` (parquet file signature)
+  - Recompute sha256 and compare against `sha256`
+- Prints per-table result, total ok/failed counts
+- **Completes in ~5 seconds** for the full 12-table set
+
+#### 8. `verify`
 Verify database structure and query capabilities.
 
 ```bash

@@ -214,6 +214,97 @@ def upload_table(
     }
 
 
+# Parquet files start AND end with the 4-byte ASCII magic "PAR1".
+# Checking the leading bytes catches "object exists but wasn't a parquet"
+# regressions cheaply (4 bytes via a Range GET).
+_PARQUET_MAGIC = b"PAR1"
+
+
+def verify_table(
+    conn,
+    table: str,
+    cfg: R2Config | None = None,
+    *,
+    s3=None,
+) -> dict[str, Any]:
+    """Verify one R2 object matches its parquet_artifacts row.
+
+    Checks:
+      1. Object exists in R2 (HEAD via get_object).
+      2. First 4 bytes are the parquet PAR1 magic.
+      3. Full-object sha256 matches the recorded sha256.
+
+    Returns a result dict including ``ok: bool`` and any ``error`` reason.
+    """
+    cfg = cfg or R2Config.from_env()
+    s3 = s3 or _s3_client(cfg)
+
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT object_key, sha256, size_bytes "
+            "FROM parquet_artifacts WHERE table_name = %s",
+            (table,),
+        )
+        row = cur.fetchone()
+    if row is None:
+        return {"table": table, "ok": False, "error": "no parquet_artifacts row"}
+    object_key, expected_sha256, expected_size = row
+
+    try:
+        resp = s3.get_object(Bucket=cfg.bucket, Key=object_key)
+    except Exception as e:  # botocore.ClientError or transport errors
+        return {"table": table, "ok": False, "error": f"GET failed: {e}"}
+
+    body = resp["Body"].read()
+    if len(body) != expected_size:
+        return {
+            "table": table,
+            "ok": False,
+            "error": f"size mismatch: expected {expected_size}, got {len(body)}",
+        }
+    if body[:4] != _PARQUET_MAGIC:
+        return {
+            "table": table,
+            "ok": False,
+            "error": f"bad magic: expected b'PAR1', got {body[:4]!r}",
+        }
+    actual_sha256 = hashlib.sha256(body).hexdigest()
+    if actual_sha256 != expected_sha256:
+        return {
+            "table": table,
+            "ok": False,
+            "error": f"sha256 mismatch: expected {expected_sha256[:16]}..., "
+                     f"got {actual_sha256[:16]}...",
+        }
+    return {
+        "table": table,
+        "ok": True,
+        "object_key": object_key,
+        "sha256": actual_sha256,
+        "size_bytes": len(body),
+    }
+
+
+def verify_all(
+    conn,
+    cfg: R2Config | None = None,
+) -> list[dict[str, Any]]:
+    """Verify every parquet_artifacts row against its R2 object."""
+    cfg = cfg or R2Config.from_env()
+    s3 = _s3_client(cfg)
+
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT table_name FROM parquet_artifacts ORDER BY table_name"
+        )
+        tables = [r[0] for r in cur.fetchall()]
+
+    results: list[dict[str, Any]] = []
+    for t in tables:
+        results.append(verify_table(conn, t, cfg, s3=s3))
+    return results
+
+
 def upload_all(
     conn,
     cfg: R2Config | None = None,
