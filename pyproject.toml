@@ -24,3 +24,13 @@ dev = [
 
 [tool.uv]
 package = true
+
+[tool.coverage.run]
+source = ["player_universe_load"]
+branch = false
+
+[tool.coverage.report]
+exclude_also = [
+    'if __name__ == "__main__":',
+    "raise NotImplementedError",
+]

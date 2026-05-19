@@ -34,15 +34,20 @@ uv run player-universe-load sync-to-neon       # remote Neon
 
 ## What Gets Loaded
 
-From fixture files in `tests/fixtures/`:
+Production volumes (ETL pipeline output read from
+`/Users/Shared/BaseballHQ/resources/{load,transform}/`):
 
-- **2,940 players** (1,405 hitters + 1,535 pitchers)
-- **17,734 stat records** (batting + pitching, multiple time periods)
-- **2,940 projections** (FanGraphs)
-- **2,939 valuations** (z-scores, dollar values, tiers)
+- **~3,400 players** (~1,640 hitters + ~1,770 pitchers)
+- **~21,000 stat records** (batting + pitching across 9 stat periods:
+  ESPN proj/current/previous/last_7/last_15/last_30 + Savant all/vs_r/vs_l)
+- **~12,000 projections** (Fangraphs preseason/updated/ros + Savant blobs)
+- **~10,000 valuations** across 5 scenarios (preseason/updated/ros/synthetic/current)
 - **1 league** with 12 scoring categories
-- **11 teams** with 258 roster slots
-- **110 matchups** (schedule)
+- **12 teams** with ~290 roster slots
+- **84 matchups** (schedule)
+
+`tests/fixtures/` holds a slim 200-player sample (deterministic seed) used by
+CI; production data lives outside the repo.
 
 ---
 
