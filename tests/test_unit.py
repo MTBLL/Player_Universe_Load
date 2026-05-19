@@ -712,10 +712,12 @@ def test_cli_sync_to_neon_no_at_in_url(monkeypatch, tmp_path: Path):
 def test_cli_load_and_sync_orchestrates(monkeypatch):
     with patch("player_universe_load.cli.load_local") as ll, \
          patch("player_universe_load.cli.export_parquets") as ep, \
+         patch("player_universe_load.cli.upload_parquets") as up, \
          patch("player_universe_load.cli.sync_to_neon") as sn:
         cli.load_and_sync(year=2026)
         ll.assert_called_once_with(year=2026)
         ep.assert_called_once()
+        up.assert_called_once()
         sn.assert_called_once()
 
 
