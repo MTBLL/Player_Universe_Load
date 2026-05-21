@@ -37,13 +37,14 @@ logger = logging.getLogger(__name__)
 
 PARQUET_DIR = Path("/Users/Shared/BaseballHQ/resources/analytics")
 
-# Matches the 12-table schema in player_universe_load/schemas/.
+# Mirrors the schema in player_universe_load/schemas/ (minus parquet_artifacts).
 # Add a new entry here when a new table is added to the schema.
 EXPORTED_TABLES: tuple[str, ...] = (
     "players",
     "leagues",
     "teams",
     "matchups",
+    "matchup_categories",
     "roster_slots",
     "league_scoring_categories",
     "player_fantasy_assignments",

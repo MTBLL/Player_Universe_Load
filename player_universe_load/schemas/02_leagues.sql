@@ -4,6 +4,7 @@ DROP TABLE IF EXISTS leagues CASCADE;
 CREATE TABLE leagues (
     league_id INTEGER PRIMARY KEY,
     season_id INTEGER NOT NULL,
+    league_name VARCHAR(100),
     scoring_period_id INTEGER,
     num_teams INTEGER,
     acquisition_budget INTEGER,

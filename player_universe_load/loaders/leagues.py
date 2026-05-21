@@ -13,6 +13,7 @@ def load_league(conn, data: dict[str, Any]) -> dict[str, int]:
     league_row = (
         data["league_id"],
         data["season_id"],
+        data.get("league_name"),
         data.get("scoring_period_id"),
         data.get("num_teams"),
         data.get("acquisition_budget"),
@@ -21,7 +22,7 @@ def load_league(conn, data: dict[str, Any]) -> dict[str, int]:
     )
 
     counts["leagues"] = bulk_insert(conn, "leagues",
-        ["league_id", "season_id", "scoring_period_id", "num_teams",
+        ["league_id", "season_id", "league_name", "scoring_period_id", "num_teams",
          "acquisition_budget", "draft_auction_budget", "roster_settings"],
         [league_row]
     )
