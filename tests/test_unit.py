@@ -341,12 +341,53 @@ def test_warn_unknown_keys_flags_drift(tmp_path: Path, capsys):
     assert "surprise_key" in out
 
 
+def test_warn_unknown_keys_flags_roster_drift(tmp_path: Path, capsys):
+    """_warn_unknown_keys surfaces unrecognized roster keys at both the team
+    and per-player level. Roster files were unscanned before this — the
+    eligible_date_by_position drift slipped through silently."""
+    fdir = tmp_path / "roster_drift"
+    fdir.mkdir()
+    (fdir / "team_1_roster.json").write_text(
+        json.dumps(
+            {
+                "team_id": 1,
+                "league_id": 10998,
+                "season_id": 2026,
+                "mystery_team_field": 1,
+                "c": [
+                    {
+                        "player_id": 5,
+                        "lineup_slot": "C",
+                        "mystery_player_field": "x",
+                    }
+                ],
+                # Single-player position (not a list) is normalized too.
+                "util": {"player_id": 9, "lineup_slot": "UTIL"},
+            }
+        )
+    )
+    schema_validator._warn_unknown_keys(fdir)
+    out = capsys.readouterr().out
+    assert "mystery_team_field" in out
+    assert "mystery_player_field" in out
+
+
 def test_warn_unknown_keys_silent_when_clean(tmp_path: Path, capsys):
     """No warning when every key is handled."""
     fdir = tmp_path / "clean"
     fdir.mkdir()
     (fdir / "league_10998_summary.json").write_text(
         json.dumps({"league_id": 10998, "season_id": 2026})
+    )
+    (fdir / "team_1_roster.json").write_text(
+        json.dumps(
+            {
+                "team_id": 1,
+                "league_id": 10998,
+                "season_id": 2026,
+                "c": [{"player_id": 5, "lineup_slot": "C"}],
+            }
+        )
     )
     schema_validator._warn_unknown_keys(fdir)
     assert "unhandled" not in capsys.readouterr().out
