@@ -397,6 +397,129 @@ def test_load_matchups_flattens_categories_and_bye_placeholder():
     assert counts["matchup_categories"] == 4
 
 
+def test_load_matchups_flattens_games_started():
+    """load_matchups flattens team*_games_started into matchup columns and
+    falls through to None when a matchup carries no start-cap tally.
+    Fixtures carry no start cap, so CI never hits these .get() lines."""
+    from player_universe_load.loaders import matchups as matchups_mod
+
+    schedule = {
+        "league_id": 10998,
+        "season_id": 2026,
+        "matchups": [
+            {
+                "matchup_id": 90010,
+                "period_id": 1,
+                "team1_id": 1,
+                "team2_id": 7,
+                "team1_games_started": {
+                    "value": 11.0,
+                    "limit_exceeded": True,
+                    "exceeded_on_scoring_period": 4,
+                },
+                "team2_games_started": {
+                    "value": 8.0,
+                    "limit_exceeded": False,
+                    "exceeded_on_scoring_period": 0,
+                },
+            },
+            # No games_started keys -> all six GS columns fall through to None.
+            {"matchup_id": 90011, "period_id": 1, "team1_id": 8, "team2_id": 17},
+        ],
+    }
+    with patch.object(
+        matchups_mod, "bulk_insert", side_effect=lambda *a, **k: len(a[3])
+    ) as bi:
+        matchups_mod.load_matchups(MagicMock(), schedule)
+
+    # First bulk_insert call is the matchups table.
+    _, table, columns, rows = bi.call_args_list[0].args
+    assert table == "matchups"
+    capped = dict(zip(columns, rows[0]))
+    assert capped["team1_gs_value"] == 11.0
+    assert capped["team1_gs_limit_exceeded"] is True
+    assert capped["team1_gs_exceeded_on_scoring_period"] == 4
+    assert capped["team2_gs_value"] == 8.0
+    assert capped["team2_gs_limit_exceeded"] is False
+    no_cap = dict(zip(columns, rows[1]))
+    assert no_cap["team1_gs_value"] is None
+    assert no_cap["team2_gs_exceeded_on_scoring_period"] is None
+
+
+# -------------------- loaders/leagues.py --------------------
+
+
+def test_load_league_flattens_games_started_limits():
+    """load_league flattens games_started_limits into league columns.
+    Fixtures carry no start cap, so CI never hits these .get() lines."""
+    from player_universe_load.loaders import leagues as leagues_mod
+
+    summary = {
+        "league_id": 10998,
+        "season_id": 2026,
+        "games_started_limits": {
+            "stat_id": 99,
+            "min": None,
+            "max_per_scoring_period": 12.0,
+            "max_per_matchup": 6.0,
+        },
+    }
+    with patch.object(
+        leagues_mod, "bulk_insert", side_effect=lambda *a, **k: len(a[3])
+    ) as bi:
+        leagues_mod.load_league(MagicMock(), summary)
+
+    # No scoring_categories key -> only the leagues insert fires.
+    _, table, columns, rows = bi.call_args_list[0].args
+    assert table == "leagues"
+    row = dict(zip(columns, rows[0]))
+    assert row["gsl_stat_id"] == 99
+    assert row["gsl_min"] is None
+    assert row["gsl_max_per_scoring_period"] == 12.0
+    assert row["gsl_max_per_matchup"] == 6.0
+
+
+# -------------------- loaders/teams.py --------------------
+
+
+def test_load_team_roster_captures_eligible_date_by_position():
+    """load_team_roster flattens eligible_date_by_position into a JSONB
+    column and falls through to None when a roster player lacks it."""
+    from player_universe_load.loaders import teams as teams_mod
+
+    roster = {
+        "team_id": 1,
+        "league_id": 10998,
+        "season_id": 2026,
+        "team_name": "Test",
+        "c": [
+            {
+                "player_id": 5016968,
+                "lineup_slot": "C",
+                "eligible_date_by_position": {
+                    "2B": "2026-01-27T07:16:39.933000Z",
+                    "DH": "2026-01-27T07:16:39.933000Z",
+                },
+            },
+            # No eligible_date_by_position -> column falls through to None.
+            {"player_id": 999, "lineup_slot": "C"},
+        ],
+    }
+    with patch.object(
+        teams_mod, "bulk_insert", side_effect=lambda *a, **k: len(a[3])
+    ) as bi:
+        teams_mod.load_team_roster(MagicMock(), roster)
+
+    roster_call = next(c for c in bi.call_args_list if c.args[1] == "roster_slots")
+    _, _, columns, rows = roster_call.args
+    by_player = {
+        dict(zip(columns, r))["player_id"]: dict(zip(columns, r)) for r in rows
+    }
+    edbp = json.loads(by_player[5016968]["eligible_date_by_position"])
+    assert edbp["2B"].startswith("2026-01-27")
+    assert by_player[999]["eligible_date_by_position"] is None
+
+
 # -------------------- __main__.py --------------------
 
 

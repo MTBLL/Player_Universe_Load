@@ -82,6 +82,7 @@ def load_team_roster(conn, data: dict[str, Any]) -> dict[str, int]:
                 player.get("acquisition_type"),
                 acquisition_date,
                 player.get("keeper_value"),
+                json_serialize(player.get("eligible_date_by_position")),
             ))
 
             # Fantasy assignment
@@ -98,7 +99,8 @@ def load_team_roster(conn, data: dict[str, Any]) -> dict[str, int]:
     if roster_rows:
         counts["roster_slots"] = bulk_insert(conn, "roster_slots",
             ["team_id", "league_id", "season_id", "player_id", "lineup_slot",
-             "acquisition_type", "acquisition_date", "keeper_value"],
+             "acquisition_type", "acquisition_date", "keeper_value",
+             "eligible_date_by_position"],
             roster_rows
         )
 

@@ -53,6 +53,7 @@ LEAGUE_SUMMARY_KEYS = {
     "draft_auction_budget",
     "roster_settings",
     "scoring_categories",
+    "games_started_limits",
 }
 
 # Per-matchup keys the schedule loader (loaders/matchups.py) consumes.
@@ -68,6 +69,8 @@ MATCHUP_KEYS = {
     "winner_id",
     "team1_categories",
     "team2_categories",
+    "team1_games_started",
+    "team2_games_started",
 }
 
 
