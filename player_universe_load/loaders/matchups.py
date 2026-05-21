@@ -16,6 +16,12 @@ def load_matchups(conn, data: dict[str, Any]) -> dict[str, int]:
 
     for matchup in data.get("matchups", []):
         matchup_id = matchup["matchup_id"]
+        # Per-team games-started tally (pitcher start cap). Absent upstream
+        # for leagues with no start cap; `or {}` lets each .get() fall
+        # through to None. One fixed-shape object per side, so it flattens
+        # into team1_/team2_ columns like team1_score/team2_score.
+        t1_gs = matchup.get("team1_games_started") or {}
+        t2_gs = matchup.get("team2_games_started") or {}
         matchup_rows.append((
             matchup_id,
             data["league_id"],
@@ -28,6 +34,12 @@ def load_matchups(conn, data: dict[str, Any]) -> dict[str, int]:
             matchup.get("team2_id"),
             matchup.get("team2_score"),
             matchup.get("winner_id"),
+            t1_gs.get("value"),
+            t1_gs.get("limit_exceeded"),
+            t1_gs.get("exceeded_on_scoring_period"),
+            t2_gs.get("value"),
+            t2_gs.get("limit_exceeded"),
+            t2_gs.get("exceeded_on_scoring_period"),
         ))
 
         if matchup.get("is_bye_week"):
@@ -60,7 +72,11 @@ def load_matchups(conn, data: dict[str, Any]) -> dict[str, int]:
         "matchups": bulk_insert(conn, "matchups",
             ["matchup_id", "league_id", "season_id", "period_id", "is_playoff",
              "is_bye_week", "team1_id", "team1_score", "team2_id",
-             "team2_score", "winner_id"],
+             "team2_score", "winner_id",
+             "team1_gs_value", "team1_gs_limit_exceeded",
+             "team1_gs_exceeded_on_scoring_period",
+             "team2_gs_value", "team2_gs_limit_exceeded",
+             "team2_gs_exceeded_on_scoring_period"],
             matchup_rows, commit=False
         ),
         "matchup_categories": bulk_insert(conn, "matchup_categories",

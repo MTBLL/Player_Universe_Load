@@ -9,6 +9,11 @@ def load_league(conn, data: dict[str, Any]) -> dict[str, int]:
     """Load league summary and scoring categories."""
     counts = {"leagues": 0, "scoring_categories": 0}
 
+    # Games-started limits (pitcher start-cap rule). Absent upstream for
+    # leagues with no start cap; `or {}` lets every .get() below fall through
+    # to None so the league still loads.
+    gsl = data.get("games_started_limits") or {}
+
     # Insert league
     league_row = (
         data["league_id"],
@@ -19,11 +24,17 @@ def load_league(conn, data: dict[str, Any]) -> dict[str, int]:
         data.get("acquisition_budget"),
         data.get("draft_auction_budget"),
         json_serialize(data.get("roster_settings")),
+        gsl.get("stat_id"),
+        gsl.get("min"),
+        gsl.get("max_per_scoring_period"),
+        gsl.get("max_per_matchup"),
     )
 
     counts["leagues"] = bulk_insert(conn, "leagues",
         ["league_id", "season_id", "league_name", "scoring_period_id", "num_teams",
-         "acquisition_budget", "draft_auction_budget", "roster_settings"],
+         "acquisition_budget", "draft_auction_budget", "roster_settings",
+         "gsl_stat_id", "gsl_min", "gsl_max_per_scoring_period",
+         "gsl_max_per_matchup"],
         [league_row]
     )
 

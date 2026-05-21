@@ -11,6 +11,10 @@ CREATE TABLE roster_slots (
     acquisition_type VARCHAR(20),
     acquisition_date TIMESTAMP,
     keeper_value INTEGER,
+    -- Position name -> ISO date the player became eligible at that position.
+    -- Variable-key map (positions differ per player), so JSONB rather than
+    -- columns. Flattened from the trx RosterSlotPlayer.eligible_date_by_position.
+    eligible_date_by_position JSONB,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(team_id, player_id, season_id)

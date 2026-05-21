@@ -53,6 +53,7 @@ LEAGUE_SUMMARY_KEYS = {
     "draft_auction_budget",
     "roster_settings",
     "scoring_categories",
+    "games_started_limits",
 }
 
 # Per-matchup keys the schedule loader (loaders/matchups.py) consumes.
@@ -68,11 +69,57 @@ MATCHUP_KEYS = {
     "winner_id",
     "team1_categories",
     "team2_categories",
+    "team1_games_started",
+    "team2_games_started",
+}
+
+# Roster files (team_*_roster.json) are single-team objects. The 11 position
+# fields each hold a list (or single) of roster-player objects.
+ROSTER_POSITION_FIELDS = (
+    "c", "first_base", "second_base", "third_base", "shortstop", "util",
+    "outfield", "sp", "rp", "bench", "injured_list",
+)
+
+# Top-level keys the team loader (loaders/teams.py) consumes.
+ROSTER_KEYS = {
+    "league_id",
+    "season_id",
+    "team_id",
+    "team_name",
+    "team_abbrev",
+    "team_logo",
+    "owners",
+    "primary_owner",
+    "record",
+    "transactions",
+    *ROSTER_POSITION_FIELDS,
+}
+
+# Per-roster-player keys. Broader than what the loader stores: bio fields
+# (name, pro_team, jersey, ...) are intentionally skipped because they
+# FK-join from `players`. This is the full known shape of trx's
+# RosterSlotPlayer, so the warning fires only on a genuinely new key.
+ROSTER_PLAYER_KEYS = {
+    "player_id",
+    "name",
+    "first_name",
+    "last_name",
+    "pro_team",
+    "primary_position",
+    "eligible_positions",
+    "lineup_slot",
+    "acquisition_type",
+    "acquisition_date",
+    "injury_status",
+    "active",
+    "keeper_value",
+    "jersey",
+    "eligible_date_by_position",
 }
 
 
 def _warn_unknown_keys(fixtures_dir: Path) -> None:
-    """Soft-warn when upstream league files carry keys no loader consumes.
+    """Soft-warn when upstream league/roster files carry keys no loader consumes.
 
     Unlike the table-column checks this never raises: a new upstream field
     should not break a load, but it must not vanish silently either. The
@@ -97,6 +144,35 @@ def _warn_unknown_keys(fixtures_dir: Path) -> None:
             print(
                 f"   ⚠️  {schedule_file.name}: unhandled matchup key(s) "
                 f"{sorted(unknown)} — not loaded into `matchups`"
+            )
+
+    # Roster files drift at two levels: the team object and the per-player
+    # objects nested in the position fields. The per-player level is the one
+    # that bit us (eligible_date_by_position was silently dropped), so check
+    # both — the team loader scans roster files but never warned on them.
+    for roster_file in sorted(fixtures_dir.glob("team_*_roster.json")):
+        data = json.loads(roster_file.read_text())
+        unknown_top = set(data) - ROSTER_KEYS
+        if unknown_top:
+            print(
+                f"   ⚠️  {roster_file.name}: unhandled key(s) "
+                f"{sorted(unknown_top)} — not loaded into `teams`"
+            )
+
+        unknown_player: set[str] = set()
+        for field in ROSTER_POSITION_FIELDS:
+            players = data.get(field)
+            if players is None:
+                continue
+            if not isinstance(players, list):
+                players = [players]
+            for player in players:
+                if isinstance(player, dict):
+                    unknown_player |= set(player) - ROSTER_PLAYER_KEYS
+        if unknown_player:
+            print(
+                f"   ⚠️  {roster_file.name}: unhandled roster-player key(s) "
+                f"{sorted(unknown_player)} — not loaded into `roster_slots`"
             )
 
 

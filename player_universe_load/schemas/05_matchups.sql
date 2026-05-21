@@ -13,6 +13,16 @@ CREATE TABLE matchups (
     team2_id INTEGER REFERENCES teams(team_id),
     team2_score VARCHAR(20),
     winner_id INTEGER REFERENCES teams(team_id),
+    -- Per-team games-started tally (pitcher start cap). Flattened from the
+    -- trx GamesStartedModel, one fixed-shape object per side — mirrors the
+    -- existing team1_/team2_ score pair. All NULL for leagues with no
+    -- start cap (trx omits the field when absent).
+    team1_gs_value NUMERIC,
+    team1_gs_limit_exceeded BOOLEAN,
+    team1_gs_exceeded_on_scoring_period INTEGER,
+    team2_gs_value NUMERIC,
+    team2_gs_limit_exceeded BOOLEAN,
+    team2_gs_exceeded_on_scoring_period INTEGER,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
