@@ -72,8 +72,18 @@ def init_schema(conn) -> None:
     print("✓ Schema initialized")
 
 
-def bulk_insert(conn, table: str, columns: list[str], rows: list[tuple]) -> int:
-    """Bulk insert rows into table with a Rich progress bar for large inserts."""
+def bulk_insert(
+    conn,
+    table: str,
+    columns: list[str],
+    rows: list[tuple],
+    commit: bool = True,
+) -> int:
+    """Bulk insert rows into table with a Rich progress bar for large inserts.
+
+    commit=False leaves the rows in the open transaction so a caller can
+    group several inserts into one atomic unit and commit them together.
+    """
     if not rows:
         return 0
 
@@ -115,10 +125,12 @@ def bulk_insert(conn, table: str, columns: list[str], rows: list[tuple]) -> int:
                     batch = rows[i : i + batch_size]
                     cur.executemany(sql, batch)
                     progress.update(task, advance=len(batch))
-            conn.commit()
+            if commit:
+                conn.commit()
         else:
             cur.executemany(sql, rows)
-            conn.commit()
+            if commit:
+                conn.commit()
             console.print(
                 f"   [green]✓[/green] Inserted [bold]{len(rows):,}[/bold] rows into "
                 f"[cyan]{table}[/cyan]"

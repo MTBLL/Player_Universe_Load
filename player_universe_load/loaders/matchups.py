@@ -52,16 +52,21 @@ def load_matchups(conn, data: dict[str, Any]) -> dict[str, int]:
                     cat.get("result"),
                 ))
 
+    # Insert both with commit=False, then commit once: a matchup and its
+    # child category rows must land atomically. A failure in the second
+    # insert otherwise leaves matchups committed without their categories,
+    # and the caller's rollback() can no longer restore the schedule.
     counts = {
         "matchups": bulk_insert(conn, "matchups",
             ["matchup_id", "league_id", "season_id", "period_id", "is_playoff",
              "is_bye_week", "team1_id", "team1_score", "team2_id",
              "team2_score", "winner_id"],
-            matchup_rows
+            matchup_rows, commit=False
         ),
         "matchup_categories": bulk_insert(conn, "matchup_categories",
             ["matchup_id", "team_id", "category", "value", "result"],
-            category_rows
+            category_rows, commit=False
         ),
     }
+    conn.commit()
     return counts
