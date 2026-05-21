@@ -42,6 +42,63 @@ PLAYER_COLUMNS = [
 BATTING_STAT_COLUMNS = ["player_id", "season_id", "stat_period"] + list(BATTING_DB_COLUMNS)
 PITCHING_STAT_COLUMNS = ["player_id", "season_id", "stat_period"] + list(PITCHING_DB_COLUMNS)
 
+# Top-level keys the league summary loader (loaders/leagues.py) consumes.
+LEAGUE_SUMMARY_KEYS = {
+    "league_id",
+    "season_id",
+    "league_name",
+    "scoring_period_id",
+    "num_teams",
+    "acquisition_budget",
+    "draft_auction_budget",
+    "roster_settings",
+    "scoring_categories",
+}
+
+# Per-matchup keys the schedule loader (loaders/matchups.py) consumes.
+MATCHUP_KEYS = {
+    "matchup_id",
+    "period_id",
+    "is_playoff",
+    "is_bye_week",
+    "team1_id",
+    "team1_score",
+    "team2_id",
+    "team2_score",
+    "winner_id",
+    "team1_categories",
+    "team2_categories",
+}
+
+
+def _warn_unknown_keys(fixtures_dir: Path) -> None:
+    """Soft-warn when upstream league files carry keys no loader consumes.
+
+    Unlike the table-column checks this never raises: a new upstream field
+    should not break a load, but it must not vanish silently either. The
+    loaders pull fields by name, so an unrecognized key is data the pipeline
+    is dropping on the floor — surface it so the schema can catch up.
+    """
+    for summary_file in sorted(fixtures_dir.glob("league_*_summary.json")):
+        data = json.loads(summary_file.read_text())
+        unknown = set(data) - LEAGUE_SUMMARY_KEYS
+        if unknown:
+            print(
+                f"   ⚠️  {summary_file.name}: unhandled key(s) "
+                f"{sorted(unknown)} — not loaded into `leagues`"
+            )
+
+    for schedule_file in sorted(fixtures_dir.glob("league_*_schedule.json")):
+        data = json.loads(schedule_file.read_text())
+        unknown: set[str] = set()
+        for matchup in data.get("matchups", []):
+            unknown |= set(matchup) - MATCHUP_KEYS
+        if unknown:
+            print(
+                f"   ⚠️  {schedule_file.name}: unhandled matchup key(s) "
+                f"{sorted(unknown)} — not loaded into `matchups`"
+            )
+
 
 def validate_data_schema(conn, fixtures_dir: Path) -> bool:
     """
@@ -100,6 +157,9 @@ def validate_data_schema(conn, fixtures_dir: Path) -> bool:
                     schema_issues.append(
                         ("player_stats_pitching", missing, extra)
                     )
+
+    # Soft-warn on upstream league/matchup keys no loader consumes.
+    _warn_unknown_keys(fixtures_dir)
 
     # Report issues
     if schema_issues:

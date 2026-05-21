@@ -128,8 +128,9 @@ def load_all(year: int | None = None):
         if schedule_file.exists():
             print(f"   📄 Reading {schedule_file}")
             schedule = json.loads(schedule_file.read_text())
-            count = load_matchups(conn, schedule)
-            print(f"  ✓ Loaded {count} matchups")
+            counts = load_matchups(conn, schedule)
+            print(f"  ✓ Loaded {counts['matchups']} matchups, "
+                  f"{counts['matchup_categories']} category rows")
         else:
             print(f"   ⚠️  Schedule file not found: {schedule_file}")
         print()

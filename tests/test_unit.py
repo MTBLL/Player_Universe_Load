@@ -311,6 +311,92 @@ def test_validate_data_schema_mismatch_raises_with_extra_cols(tmp_path: Path, ca
         conn.close()
 
 
+def test_warn_unknown_keys_flags_drift(tmp_path: Path, capsys):
+    """_warn_unknown_keys surfaces upstream keys no loader consumes.
+
+    Fixtures carry no drift, so CI never exercises the warning branches —
+    this test makes them deterministic.
+    """
+    fdir = tmp_path / "drift"
+    fdir.mkdir()
+    (fdir / "league_10998_summary.json").write_text(
+        json.dumps(
+            {"league_id": 10998, "season_id": 2026, "brand_new_field": "x"}
+        )
+    )
+    (fdir / "league_10998_schedule.json").write_text(
+        json.dumps(
+            {
+                "league_id": 10998,
+                "season_id": 2026,
+                "matchups": [
+                    {"matchup_id": 1, "period_id": 1, "surprise_key": True}
+                ],
+            }
+        )
+    )
+    schema_validator._warn_unknown_keys(fdir)
+    out = capsys.readouterr().out
+    assert "brand_new_field" in out
+    assert "surprise_key" in out
+
+
+def test_warn_unknown_keys_silent_when_clean(tmp_path: Path, capsys):
+    """No warning when every key is handled."""
+    fdir = tmp_path / "clean"
+    fdir.mkdir()
+    (fdir / "league_10998_summary.json").write_text(
+        json.dumps({"league_id": 10998, "season_id": 2026})
+    )
+    schema_validator._warn_unknown_keys(fdir)
+    assert "unhandled" not in capsys.readouterr().out
+
+
+# -------------------- loaders/matchups.py --------------------
+
+
+def test_load_matchups_flattens_categories_and_bye_placeholder():
+    """load_matchups flattens teamN_categories into child rows and emits a
+    bye sentinel. Fixtures lack team*_categories, so CI never hits the
+    category-append line without this test."""
+    from player_universe_load.loaders.matchups import load_matchups
+
+    schedule = {
+        "league_id": 10998,
+        "season_id": 2026,
+        "matchups": [
+            {
+                "matchup_id": 90001,
+                "period_id": 1,
+                "is_bye_week": False,
+                "team1_id": 1,
+                "team1_score": "2-1-0",
+                "team2_id": 7,
+                "team2_score": "1-2-0",
+                "winner_id": 1,
+                "team1_categories": [
+                    {"category": "HR", "value": 9.0, "result": "WIN"},
+                    {"category": "ERA", "value": 3.1, "result": "LOSS"},
+                ],
+                "team2_categories": [
+                    {"category": "HR", "value": 4.0, "result": "LOSS"},
+                ],
+            },
+            {
+                "matchup_id": 90002,
+                "period_id": 1,
+                "is_bye_week": True,
+                "team1_id": 8,
+                "team1_score": "0-0-0",
+            },
+        ],
+    }
+    counts = load_matchups(MagicMock(), schedule)
+    assert counts["matchups"] == 2
+    # 2 team1 + 1 team2 category rows, plus 1 bye sentinel row.
+    assert counts["matchup_categories"] == 4
+
+
 # -------------------- __main__.py --------------------
 
 
