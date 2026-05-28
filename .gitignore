@@ -23,3 +23,6 @@ coverage.xml
 coverage.json
 htmlcov/
 junit.xml
+
+# Local-only handoff tickets / scratch notes
+tickets/
