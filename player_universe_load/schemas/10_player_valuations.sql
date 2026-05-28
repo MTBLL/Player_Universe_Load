@@ -1,7 +1,10 @@
 -- Player Valuations
 -- Stores fantasy value calculations per player/position/season/scenario.
 -- valuation_type discriminates between scenarios: preseason, updated, ros, synthetic, current.
--- Two-way players (e.g., Shohei Ohtani) have multiple rows with different positions.
+-- Row count per (player, valuation_type): one best-pool row per scenario.
+-- Two-way players (e.g., Shohei Ohtani) get two rows because the hitter and
+-- pitcher pipelines each emit independently; primary_position differs between
+-- them, satisfying the composite UNIQUE below.
 DROP TABLE IF EXISTS player_valuations CASCADE;
 
 CREATE TABLE player_valuations (
