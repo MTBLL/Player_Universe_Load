@@ -20,12 +20,18 @@ player-universe-load = "player_universe_load.cli:main"
 dev = [
     "mypy>=1.15.0",
     "types-psycopg2>=2.9.21.20250318",
-    "pytest>=8.3.4",
+    "pytest>=9.0.3",
     "pytest-cov>=7.1.0",
 ]
 
 [tool.uv]
 package = true
+
+# Explicit package scope. Without this, setuptools' flat-layout auto-discovery
+# sees any top-level directory (e.g. local-only `tickets/`) and refuses to
+# build because it can't tell which dir is the package.
+[tool.setuptools.packages.find]
+include = ["player_universe_load*"]
 
 [tool.coverage.run]
 source = ["player_universe_load"]
