@@ -185,6 +185,43 @@ def test_jsonb_fields():
         conn.close()
 
 
+def test_v_player_valuation_by_position_explodes_jsonb_correctly():
+    """16_views.sql creates v_player_valuation_by_position by exploding
+    player_valuations.by_position via CROSS JOIN LATERAL jsonb_each. The
+    DDL itself is exercised by init_schema on every load, but a malformed
+    explosion (missing LATERAL, wrong WHERE clause, wrong column cast)
+    would still return *some* rows — this test pins the row-count math
+    identity so a shape regression fails loudly."""
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                  (SELECT COUNT(*) FROM v_player_valuation_by_position) AS view_count,
+                  (SELECT COUNT(*)
+                   FROM player_valuations pv
+                   CROSS JOIN LATERAL jsonb_object_keys(pv.by_position)
+                   WHERE pv.by_position IS NOT NULL) AS expected_count
+                """
+            )
+            view_count, expected = cur.fetchone()
+            assert view_count == expected, (
+                f"view row count {view_count} != jsonb_object_keys explosion {expected}"
+            )
+            # Sanity: tier values from the view must be a subset of the known
+            # tier set — guards against the boolean cast in 16_views.sql ever
+            # silently coercing a wrong jsonb value into a phantom tier.
+            cur.execute(
+                "SELECT DISTINCT tier FROM v_player_valuation_by_position "
+                "WHERE tier IS NOT NULL"
+            )
+            view_tiers = {r[0] for r in cur.fetchall()}
+            assert view_tiers <= {"ROSTERED", "REPLACEMENT", "BELOW_REPLACEMENT"}
+    finally:
+        conn.close()
+
+
 if __name__ == "__main__":
     # Allow running directly: python -m pytest tests/test_load_integration.py -v
     pytest.main([__file__, "-v", "-s"])
