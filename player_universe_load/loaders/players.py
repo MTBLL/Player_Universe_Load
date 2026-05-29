@@ -388,6 +388,7 @@ def load_players(conn, data: list[dict[str, Any]], season_id: int) -> dict[str, 
                     val.get("tier"),
                     val.get("total_z"),
                     val.get("total_dollars"),
+                    json_serialize(val.get("by_position")),
                 ))
 
     with Progress(
@@ -439,7 +440,8 @@ def load_players(conn, data: list[dict[str, Any]], season_id: int) -> dict[str, 
 
     if valuation_rows:
         counts["valuations"] = bulk_insert(conn, "player_valuations",
-            ["player_id", "season_id", "valuation_type", "primary_position", "tier", "total_z", "total_dollars"],
+            ["player_id", "season_id", "valuation_type", "primary_position",
+             "tier", "total_z", "total_dollars", "by_position"],
             valuation_rows
         )
 

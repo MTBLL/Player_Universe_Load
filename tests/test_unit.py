@@ -983,6 +983,75 @@ def test_load_players_valuation_lookup_no_row_via_wrapping_conn():
         real_conn.close()
 
 
+def test_load_players_captures_by_position():
+    """load_players JSON-serializes valuations[*].by_position into a JSONB
+    column and falls through to None when the scenario lacks it. Fixtures
+    predating PR #14 carried no by_position, so CI would otherwise never
+    exercise this passthrough."""
+    from player_universe_load.loaders import players as players_mod
+
+    data = [{
+        "id_espn": 123,
+        "name": "Test Player",
+        "player_type": "batter",
+        "stats": {},
+        "valuations": {
+            "current": {
+                "primary_position": "OF",
+                "tier": "ROSTERED",
+                "total_z": 5.0,
+                "total_dollars": 10.0,
+                "z_scores": {"HR": 1.0},
+                "dollar_values": {"HR": 2.0},
+                "by_position": {
+                    "OF": {
+                        "tier": "ROSTERED",
+                        "shadow": False,
+                        "total_z": 5.0,
+                        "total_dollars": 10.0,
+                        "z_scores": {"HR": 1.0},
+                        "dollar_values": {"HR": 2.0},
+                    },
+                    "UTIL": {
+                        "tier": "REPLACEMENT",
+                        "shadow": True,
+                        "total_z": 2.0,
+                        "total_dollars": 3.0,
+                        "z_scores": {"HR": 0.5},
+                        "dollar_values": {"HR": 0.7},
+                    },
+                },
+            },
+            # No by_position -> column falls through to None.
+            "preseason": {
+                "primary_position": "OF",
+                "tier": "ROSTERED",
+                "total_z": 4.0,
+                "total_dollars": 8.0,
+                "z_scores": {"HR": 0.8},
+                "dollar_values": {"HR": 1.5},
+            },
+        },
+    }]
+
+    with patch.object(
+        players_mod, "bulk_insert", side_effect=lambda *a, **k: len(a[3])
+    ) as bi:
+        players_mod.load_players(MagicMock(), data, season_id=2026)
+
+    val_call = next(c for c in bi.call_args_list if c.args[1] == "player_valuations")
+    _, _, columns, rows = val_call.args
+    assert "by_position" in columns
+    by_type = {
+        dict(zip(columns, r))["valuation_type"]: dict(zip(columns, r)) for r in rows
+    }
+    current_bp = json.loads(by_type["current"]["by_position"])
+    assert current_bp["OF"]["shadow"] is False
+    assert current_bp["OF"]["total_dollars"] == 10.0
+    assert current_bp["UTIL"]["shadow"] is True
+    assert by_type["preseason"]["by_position"] is None
+
+
 # -------------------- cli.py --------------------
 
 
