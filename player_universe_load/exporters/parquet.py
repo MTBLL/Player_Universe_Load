@@ -26,10 +26,15 @@ from rich.progress import (
 
 from ..db import console
 
-# All NUMERIC values are stored as decimal128(18, 3): 15 integer digits + 3
-# fractional digits, lossless within that range. Quantize with ROUND_HALF_UP
-# so .5 rounds up (regulatory accounting convention), not banker's rounding.
-_NUMERIC_PRECISION = 18
+# All NUMERIC values are emitted as float64. decimal128 is unreadable by most
+# browser/WASM parquet readers (apache-arrow JS, parquet-wasm, hyparquet decode
+# it to null/garbage), and this dataset's only consumer reads parquet in the
+# browser straight from R2. float64 is universally supported; for stats/dollars
+# rounded to thousandths the value is well within float64's exact-integer range,
+# so display and aggregation are lossless in practice.
+# Decimals are quantized to 3 places with ROUND_HALF_UP (so .5 rounds up, the
+# accounting convention) before the float cast, keeping clean 3-decimal values
+# instead of float noise like 4.6080000000001.
 _NUMERIC_SCALE = 3
 _QUANTUM = Decimal("0.001")
 
@@ -85,7 +90,7 @@ _PG_TO_ARROW = {
     "bigserial": pa.int64(),
     "real": pa.float32(),
     "double precision": pa.float64(),
-    "numeric": pa.decimal128(_NUMERIC_PRECISION, _NUMERIC_SCALE),
+    "numeric": pa.float64(),
     "boolean": pa.bool_(),
     "text": pa.string(),
     "character varying": pa.string(),
@@ -113,14 +118,18 @@ def _arrow_schema_for(conn, table: str) -> pa.Schema:
 
 
 def _sanitize_decimals(rows: list[dict]) -> list[dict]:
-    """Normalize Decimal values for parquet emission.
+    """Normalize Decimal values to float for parquet emission.
+
+    The NUMERIC columns are written as float64 (browser parquet readers can't
+    decode decimal128 — see _PG_TO_ARROW), so each psycopg2 Decimal is converted
+    to a Python float:
 
     - Decimal('Infinity'/'-Infinity'/'NaN') (legal in Postgres NUMERIC,
-      e.g. ERA for a pitcher with 0 IP) -> None. pyarrow rejects non-finite
-      Decimals and division-by-zero isn't an analytics-correct value.
-    - Finite Decimal values quantized to thousandths with ROUND_HALF_UP so
-      they fit decimal128(18, 3) exactly. .5 rounds up (regulatory
-      convention), not Python's default banker's rounding.
+      e.g. ERA for a pitcher with 0 IP) -> None. division-by-zero isn't an
+      analytics-correct value, and a float NaN would muddy downstream queries.
+    - Finite Decimal values quantized to thousandths with ROUND_HALF_UP (.5
+      rounds up, accounting convention) before float() so the result is a clean
+      3-decimal float rather than binary-fp noise.
     """
     for r in rows:
         for k, v in list(r.items()):
@@ -129,7 +138,7 @@ def _sanitize_decimals(rows: list[dict]) -> list[dict]:
             if not v.is_finite():
                 r[k] = None
             else:
-                r[k] = v.quantize(_QUANTUM, rounding=ROUND_HALF_UP)
+                r[k] = float(v.quantize(_QUANTUM, rounding=ROUND_HALF_UP))
     return rows
 
 
@@ -179,10 +188,10 @@ def export_table(conn, table: str, target_dir: Path = PARQUET_DIR) -> Path:
         logger.warning("Table %s is empty; writing zero-row parquet", table)
     else:
         # JSONB columns are JSON-encoded as strings (pyarrow type-inference
-        # rejects heterogeneous nested shapes). NUMERIC values quantized to
-        # thousandths so they fit decimal128(18, 3) exactly. Other column
-        # types come back from psycopg2 as native Python types that match
-        # the declared schema directly.
+        # rejects heterogeneous nested shapes). NUMERIC values are quantized to
+        # thousandths and cast to float64 (browser readers can't decode
+        # decimal128). Other column types come back from psycopg2 as native
+        # Python types that match the declared schema directly.
         rows = _sanitize_decimals(rows)
         rows = _stringify_jsonb(rows, jsonb_cols)
 
