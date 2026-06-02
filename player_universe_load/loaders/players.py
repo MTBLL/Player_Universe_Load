@@ -34,13 +34,30 @@ FANGRAPHS_PERIOD_LABELS = {
     "projs_updated": "updated",
     "ros": "ros",
 }
+# Savant metrics kept as one-row-per-player JSONB blobs in player_savant.
+# pitch_arsenal is NOT here — it's a list at a different grain, unwrapped into
+# the typed player_pitch_arsenal table (see ARSENAL_FIELDS).
 SAVANT_BLOB_PERIODS = (
     "statcast",
     "home_runs",
     "sprint_speed",
     "swing_take",
     "expected_statistics",
-    "pitch_arsenal",
+)
+
+# stats.savant.pitch_arsenal is a list of per-pitch dicts with this fixed
+# 32-field schema (identical for pitchers/hitters). Column order here is the
+# insert order for player_pitch_arsenal; names match the source keys exactly.
+ARSENAL_FIELDS = (
+    "pitch_type", "pitch_name", "pitches", "pitch_usage_pct",
+    "PA", "AVG", "SLG", "wOBA", "xAVG", "xSLG", "xwOBA",
+    "K_pct", "whiff_pct", "put_away_pct", "hardhit_pct",
+    "run_value", "run_value_per_100",
+    "pitches_pct_rnk", "pitch_usage_pct_pct_rnk", "PA_pct_rnk",
+    "AVG_pct_rnk", "SLG_pct_rnk", "wOBA_pct_rnk", "xAVG_pct_rnk",
+    "xSLG_pct_rnk", "xwOBA_pct_rnk", "K_pct_pct_rnk", "whiff_pct_pct_rnk",
+    "put_away_pct_pct_rnk", "hardhit_pct_pct_rnk", "run_value_pct_rnk",
+    "run_value_per_100_pct_rnk",
 )
 
 # Stat-key markers used to infer player_type when the explicit marker is
@@ -281,12 +298,15 @@ def _build_pitching_row(player_id: int, season_id: int, period: str, stats: dict
 
 def load_players(conn, data: list[dict[str, Any]], season_id: int) -> dict[str, int]:
     """Load players, their stats, projections, and valuations."""
-    counts = {"players": 0, "batting": 0, "pitching": 0, "projections": 0, "valuations": 0}
+    counts = {"players": 0, "batting": 0, "pitching": 0, "projections": 0,
+              "savant": 0, "pitch_arsenal": 0, "valuations": 0}
 
     player_rows = []
     batting_rows = []
     pitching_rows = []
     projection_rows = []
+    savant_rows = []
+    arsenal_rows = []
     valuation_rows = []
     valuation_detail_rows = []
 
@@ -361,18 +381,27 @@ def load_players(conn, data: list[dict[str, Any]], season_id: int) -> dict[str, 
                 json_serialize(proj),
             ))
 
+        ptype = "hitter" if player_type == "batter" else "pitcher"
+
+        # Savant descriptive blobs -> player_savant (observed stats, JSONB).
         for savant_blob_key in SAVANT_BLOB_PERIODS:
             blob = savant.get(savant_blob_key)
             if not blob:
                 continue
-            projection_rows.append((
+            savant_rows.append((
                 player["id_espn"],
                 season_id,
-                "savant",
                 savant_blob_key,
-                "hitter" if player_type == "batter" else "pitcher",
+                ptype,
                 json_serialize(blob),
             ))
+
+        # pitch_arsenal -> player_pitch_arsenal, one typed row per pitch.
+        for pitch in savant.get("pitch_arsenal") or []:
+            arsenal_rows.append(
+                (player["id_espn"], season_id, ptype)
+                + tuple(pitch.get(f) for f in ARSENAL_FIELDS)
+            )
 
         # Valuations: dict of scenario -> {primary_position, tier, total_z, total_dollars, z_scores, dollar_values}
         # Scenarios: preseason, updated, ros, synthetic, current
@@ -409,7 +438,8 @@ def load_players(conn, data: list[dict[str, Any]], season_id: int) -> dict[str, 
     console.print(
         f"   [dim]📝 Prepared {len(player_rows):,} players, "
         f"{len(batting_rows):,} batting, {len(pitching_rows):,} pitching, "
-        f"{len(projection_rows):,} projections, {len(valuation_rows):,} valuations[/dim]"
+        f"{len(projection_rows):,} projections, {len(savant_rows):,} savant, "
+        f"{len(arsenal_rows):,} pitch_arsenal, {len(valuation_rows):,} valuations[/dim]"
     )
 
     counts["players"] = bulk_insert(conn, "players", [
@@ -436,6 +466,18 @@ def load_players(conn, data: list[dict[str, Any]], season_id: int) -> dict[str, 
         counts["projections"] = bulk_insert(conn, "player_projections",
             ["player_id", "season_id", "projection_source", "projection_period", "player_type", "projections"],
             projection_rows
+        )
+
+    if savant_rows:
+        counts["savant"] = bulk_insert(conn, "player_savant",
+            ["player_id", "season_id", "metric", "player_type", "data"],
+            savant_rows
+        )
+
+    if arsenal_rows:
+        counts["pitch_arsenal"] = bulk_insert(conn, "player_pitch_arsenal",
+            ["player_id", "season_id", "player_type"] + list(ARSENAL_FIELDS),
+            arsenal_rows
         )
 
     if valuation_rows:

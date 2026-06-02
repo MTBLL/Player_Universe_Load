@@ -56,6 +56,8 @@ EXPORTED_TABLES: tuple[str, ...] = (
     "player_stats_batting",
     "player_stats_pitching",
     "player_projections",
+    "player_savant",
+    "player_pitch_arsenal",
     "player_valuations",
     "player_valuation_details",
     "position_summary",
