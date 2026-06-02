@@ -62,11 +62,47 @@ def test_load_all_fixtures():
             assert roster_count > 0, "Should have roster slots"
             print(f"✓ {roster_count} roster slots loaded")
 
-            # Test projections loaded
+            # Test projections loaded — now fangraphs-only; savant moved out.
             cur.execute("SELECT COUNT(*) FROM player_projections")
             proj_count = cur.fetchone()[0]
             assert proj_count > 0, "Should have projections"
             print(f"✓ {proj_count} projections loaded")
+
+            cur.execute(
+                "SELECT DISTINCT projection_source FROM player_projections"
+            )
+            sources = {r[0] for r in cur.fetchall()}
+            assert sources == {"fangraphs"}, (
+                f"player_projections must be fangraphs-only, got {sources}"
+            )
+
+            # Test savant blob metrics loaded into their own table
+            cur.execute("SELECT COUNT(*) FROM player_savant")
+            savant_count = cur.fetchone()[0]
+            assert savant_count > 0, "Should have savant metrics"
+            cur.execute("SELECT DISTINCT metric FROM player_savant")
+            metrics = {r[0] for r in cur.fetchall()}
+            assert "pitch_arsenal" not in metrics, (
+                "pitch_arsenal belongs in player_pitch_arsenal, not player_savant"
+            )
+            assert metrics <= {
+                "statcast", "home_runs", "sprint_speed",
+                "swing_take", "expected_statistics",
+            }, f"unexpected savant metric(s): {metrics}"
+            print(f"✓ {savant_count} savant blob rows loaded ({len(metrics)} metrics)")
+
+            # Test pitch arsenal unwrapped into typed rows (one per pitch type)
+            cur.execute("SELECT COUNT(*) FROM player_pitch_arsenal")
+            arsenal_count = cur.fetchone()[0]
+            assert arsenal_count > 0, "Should have pitch arsenal rows"
+            # Typed columns are populated, not null-collapsed.
+            cur.execute(
+                "SELECT pitch_type, pitches, pitch_usage_pct FROM player_pitch_arsenal "
+                "WHERE pitches IS NOT NULL LIMIT 1"
+            )
+            row = cur.fetchone()
+            assert row and row[0] and row[1] > 0, "arsenal row should have typed values"
+            print(f"✓ {arsenal_count} pitch_arsenal rows loaded")
 
             # Test valuations loaded
             cur.execute("SELECT COUNT(*) FROM player_valuations")

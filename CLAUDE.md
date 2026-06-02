@@ -273,14 +273,27 @@ All tables have foreign keys for Hasura auto-relationship detection.
    - ~70 stat columns (ERA, WHIP, K, SV, etc.)
 
 **Analytics:**
-10. **player_projections** - FanGraphs projections
+10. **player_projections** - FanGraphs projections (fangraphs-only)
     - Foreign key: `player_id`
     - Stored as JSONB for flexibility
+    - Source `stats.fangraphs.{projections,projs_updated,ros}`
 
-11. **player_valuations** - Fantasy value calculations
+11. **player_savant** - Baseball Savant observed metric blobs (JSONB)
+    - Foreign key: `player_id`
+    - One row per `(player, season, metric, player_type)`
+    - Metrics: `statcast`, `home_runs`, `sprint_speed`, `swing_take`,
+      `expected_statistics` (source `stats.savant.*`)
+
+12. **player_pitch_arsenal** - Per-pitch Savant data, fully unwrapped (typed)
+    - Foreign key: `player_id`
+    - One row per `(player, season, player_type, pitch_type)`
+    - 32 typed columns (usage%, AVG, whiff%, run_value, percentile ranks…)
+    - Source `stats.savant.pitch_arsenal` (list)
+
+13. **player_valuations** - Fantasy value calculations
     - Foreign keys: `player_id`, `league_id` (optional)
 
-12. **player_valuation_details** - Per-category z-scores/dollars
+14. **player_valuation_details** - Per-category z-scores/dollars
     - Foreign key: `valuation_id`
 
 ### Key Schema Features
