@@ -340,6 +340,7 @@ def load_players(conn, data: list[dict[str, Any]], season_id: int) -> dict[str, 
             player.get("injured"),
             player.get("active"),
             player.get("jersey"),
+            json_serialize(player.get("news")),
         ))
 
         # Stats: stats.{espn,fangraphs,savant}.{period}
@@ -447,7 +448,8 @@ def load_players(conn, data: list[dict[str, Any]], season_id: int) -> dict[str, 
         "name_ascii", "slug", "fangraphs_api_route", "headshot", "primary_position",
         "eligible_slots", "pro_team", "weight", "display_weight", "height",
         "display_height", "bats", "throws", "date_of_birth", "birth_place",
-        "debut_year", "injury_status", "status", "injured", "active", "jersey"
+        "debut_year", "injury_status", "status", "injured", "active", "jersey",
+        "news"
     ], player_rows)
 
     if batting_rows:

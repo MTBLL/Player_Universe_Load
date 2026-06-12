@@ -36,6 +36,7 @@ PLAYER_COLUMNS = [
     "injured",
     "active",
     "jersey",
+    "news",
 ]
 
 # Sourced from the spec in loaders/players.py to avoid drift.
