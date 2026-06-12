@@ -29,6 +29,7 @@ CREATE TABLE players (
     injured BOOLEAN,
     active BOOLEAN,
     jersey INTEGER,
+    news JSONB,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
